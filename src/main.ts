@@ -4,7 +4,7 @@ import './skills.css';
 import './competition.css';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName } from './roster';
-import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus } from './tournament';
+import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus, type Match } from './tournament';
 import { itemGuideMarkup } from './item-guide';
 import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
 import { cosmetics, equipCosmetic } from './cosmetics';
@@ -163,10 +163,12 @@ function tournamentMarkup(): string {
   const t = competition;
   if (!t) return page('冠军赛', '<p>64 名选手，一座奖杯。</p><button class="button button-primary" data-action="new-tournament">创建赛事</button>');
   const order = tournamentOrder(t);
-  const groups = [...t.archive, ...(t.round === 'complete' ? [] : [{ round: t.round, matches: t.matches }])];
+  const groupCards = (matches: Match[]) => matches.map((m,i)=>({m,i})).sort((a,b)=>Number(b.m.members.includes('player'))-Number(a.m.members.includes('player'))).map(({m,i})=>`<article class="competition-card ${m.members.includes('player')?'my-match':''}"><strong>第 ${i+1} 组${m.members.includes('player')?' · 我的比赛':''}</strong>${(m.standings??m.members.map(id=>({id,score:null}))).map(p=>`<div class="score-row ${p.id==='player'?'you':''}"><strong>${playerName(p.id)}</strong><span>${p.score??'待赛'}</span>${m.winner===p.id?'<b>胜出</b>':''}</div>`).join('')}</article>`).join('');
   return page(t.round === 'complete' ? '冠军诞生' : roundNames[t.round], `<p class="competition-note">64 → 16 → 4 → 2 · 电脑组快速模拟，玩家组实际对战。晋级同分安排加赛；决赛先胜两局夺冠。</p>
     ${t.round === 'complete' ? `<div class="medal-strip">${order.slice(0, 4).map((id, i) => `<b>${['冠军','亚军','季军','第四名'][i]} · ${playerName(id)}</b>`).join('')}</div><p>你的名次：第 ${order.indexOf('player') + 1} 名</p>` : `<div class="page-actions">${t.needsReward ? (['capacity','speed','shield'] as Bonus[]).map(b => `<button class="button button-primary" data-bonus="${b}">下一场：${b === 'capacity' ? '容量 +1' : b === 'speed' ? '速度 +1 档' : '一次护盾'}</button>`).join('') : `<button class="button button-primary" data-action="tournament-play">${pendingPlayerMatch(t) ? t.replay ? '进入同分加赛' : '进入我的比赛' : '模拟其余比赛并继续'}</button>`}</div>`}
-    <div class="competition-grid">${groups.flatMap(g => g.matches.map((m, i) => `<article class="competition-card"><strong>${roundNames[g.round]} · 第 ${i + 1} 组${m.members.includes('player') ? ' · 我的组' : ''}</strong>${(m.standings ?? m.members.map(id => ({ id, score: null }))).map(p => `<div class="score-row ${p.id === 'player' ? 'you' : ''}"><strong>${playerName(p.id)}</strong><span>${p.score ?? '待赛'}</span>${m.winner === p.id ? '<b>晋级</b>' : ''}</div>`).join('')}</article>`)).join('')}</div>`);
+    ${t.finals.length?`<div class="final-score">决赛大比分 ${t.finals.map(id=>`${playerName(id)} ${t.finalWins[id]??0}`).join(' : ')}</div>`:''}
+    <div class="competition-grid">${groupCards(t.matches)}</div>
+    ${t.archive.length?`<h2>已完成轮次</h2>${t.archive.map((g,i)=>`<details class="stage-archive"><summary>${roundNames[g.round]} · ${g.matches.length} 场 <span>查看赛果</span></summary><div class="competition-grid">${groupCards(g.matches)}</div></details>`).join('')}`:''}`);
 }
 
 function progressTournament(): void {
@@ -214,9 +216,9 @@ function pauseMarkup(): string {
 
 function resultMarkup(): string {
   const result = game?.getResult() ?? 'draw';
-  const standings = game?.getStandings() ?? [];
+  const standings = ranked(game?.getStandings() ?? []);
   const copy = result === 'win' ? ['本场获胜！', '成为最后的存活者，或超时以最高分胜出。'] : result === 'lose' ? ['比赛结束', '下次争取更多有效命中。'] : ['本场平局', '存活者最高分并列，或所有选手同归于尽。'];
-  copy[1] += `<br>${standings.map(a => `${a.name}：${a.score} 分（命中 ${a.hits} · 炸箱 ${a.crates}）`).join('<br>')}`;
+  copy[1] += `</p><div class="result-standings">${standings.map((a,i)=>`<div class="result-standing ${a.id==='player'?'you':''}"><b class="place-number">${i+1}</b><div><strong>${playerName(a.id)}</strong><small>${a.alive?'存活':'已淘汰'} · 命中 ${a.hits} · 炸箱 ${a.crates}</small></div><strong>${a.score}<small>本局分</small></strong></div>`).join('')}</div><p class="result-copy">长期积分已自动结算；赛事全部结束后记录最终名次。`;
   return `<main class="screen result-screen result-${result}"><div class="result-burst">${result === 'win' ? '✦' : result === 'lose' ? '×' : '•'}</div><p class="eyebrow">ROUND COMPLETE · ${result.toUpperCase()}</p><h1>${copy[0]}</h1><p class="result-copy">${copy[1]}</p><div class="result-actions"><button class="button button-primary button-large" data-action="restart">${matchMode === 'championship' ? '返回赛事签表' : '再来一局'} <span>→</span></button><button class="button button-ghost" data-action="home">返回主菜单</button></div><div class="result-note">NO LOGIN · LOCAL SCORE</div></main>`;
 }
 
@@ -272,7 +274,7 @@ function handleAction(action: string): void {
   if (action !== 'bomb') audio.play('click');
   if (!['bomb', 'skill', 'swap'].includes(action)) { heldDirections.clear(); holdingBomb = false; }
   switch (action) {
-    case 'continue-save': if(!suspended)break; restoring=true; matchMode=suspended.mode; quickId=suspended.id; selectedMap=suspended.snapshot.mapId; difficulty=suspended.snapshot.difficulty; opponents=suspended.snapshot.opponents; screen='game'; render(); break;
+    case 'continue-save': if(!suspended)break; if(saveError){alert(saveError);break;} restoring=true; matchMode=suspended.mode; quickId=suspended.id; selectedMap=suspended.snapshot.mapId; difficulty=suspended.snapshot.difficulty; opponents=suspended.snapshot.opponents; screen='game'; render(); break;
     case 'toggle-motion': settings.reducedMotion=!settings.reducedMotion; applyPreferences(); persist(); render(); break;
     case 'export-save': {
       const data: Save = { career,tournament:competition,active:suspended,settings };
@@ -290,7 +292,7 @@ function handleAction(action: string): void {
     case 'skill': game?.usePlayerSkill(); break;
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': screen = 'setup'; render(); break;
-    case 'play': stopGame(); suspended=null; quickId = crypto.randomUUID(); matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'play': if(suspended&&!confirm('开始新比赛将替换未完成的单局存档，是否继续？'))break; stopGame(); suspended=null; quickId = crypto.randomUUID(); matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
     case 'home': stopGame(); screen = 'home'; render(); break;
     case 'howto': screen = 'howto'; render(); break;
@@ -309,6 +311,7 @@ function handleAction(action: string): void {
         render();
       } else if (game) {
         game.start(difficulty, selectedMap, opponents);
+        applyPreferences();
         startNewRound = false;
         screen = 'game';
         updateHud();
