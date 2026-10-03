@@ -223,6 +223,16 @@ export class GameEngine {
     this.renderer.shadowMap.enabled = quality === 'high';
   }
 
+  public setPlayerColor(color: number): void {
+    const actor=this.actors.get('player');
+    if(!actor)return;
+    actor.color=color;
+    for(const name of ['body','head','ring']) {
+      const mesh=actor.group.getObjectByName(name) as THREE.Mesh<THREE.BufferGeometry,THREE.MeshStandardMaterial> | undefined;
+      mesh?.material.color.setHex(color);
+    }
+  }
+
   public snapshot(): GameSnapshot {
     return structuredClone({ mapId: this.mapId, difficulty: this.difficulty, opponents: this.opponents, tiles: this.tiles, actors: [...this.actors.values()].map(({ group, body, ring, label, ...data }) => data), bombs: this.bombs, items: this.items, remaining: this.remaining, elapsed: this.elapsed, coinTimer: this.coinTimer, bombId: this.bombId, rng: this.rng.exportState() });
   }
@@ -531,6 +541,7 @@ export class GameEngine {
       new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.08 }),
     );
     body.position.y = 0.43;
+    body.name = 'body';
     const protection = new THREE.Mesh(new THREE.SphereGeometry(0.61, 16, 12), new THREE.MeshBasicMaterial({ color: 0x70e7ff, transparent: true, opacity: 0.24, depthWrite: false, wireframe: true }));
     protection.name = 'protection';
     protection.position.y = 0.55;
@@ -539,6 +550,7 @@ export class GameEngine {
     body.castShadow = true;
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 20, 16), new THREE.MeshStandardMaterial({ color, roughness: 0.32 }));
     head.position.y = 0.83;
+    head.name = 'head';
     head.castShadow = true;
     const visor = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), new THREE.MeshStandardMaterial({ color: 0xf9fdff, roughness: 0.35 }));
     visor.scale.set(1, 0.65, 0.45);
@@ -554,6 +566,7 @@ export class GameEngine {
     }
     const ring = new THREE.Mesh(new THREE.RingGeometry(id === 'player' ? 0.34 : 0.3, id === 'player' ? 0.44 : 0.37, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: id === 'player' ? 0.78 : 0.42, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2;
+    ring.name = 'ring';
     ring.position.y = 0.03;
     const label = this.createActorLabel(id === 'player' ? 'YOU' : name, color, id === 'player');
     label.position.set(0, 1.38, 0);

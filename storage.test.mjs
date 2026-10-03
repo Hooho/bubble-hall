@@ -26,3 +26,12 @@ const before=JSON.stringify(save.career);settleTournament(save.career,save.tourn
 assert.equal(save.career.history.length,2);
 await store.write(save,2);assert.ok(validateSave(store.load().data));
 console.log('PASS: version/checksum validation, backup, conflict, difficulty score, idempotent awards and all tournament save stages');
+await assert.rejects(()=>store.recover(save),/当前存档有效/);
+storage.setItem('test','broken');await store.recover(save);
+assert.equal(storage.getItem('test:damaged'),'broken');assert.ok(validateSave(store.load().data));
+const {equipCosmetic}=await load('src/cosmetics.ts');
+const wardrobe=initialSave();assert.equal(equipCosmetic(wardrobe.career,wardrobe.settings,'mint'),false);
+wardrobe.career.coins=120;assert.equal(equipCosmetic(wardrobe.career,wardrobe.settings,'mint'),true);
+assert.equal(wardrobe.career.coins,0);assert.equal(equipCosmetic(wardrobe.career,wardrobe.settings,'mint'),true);
+assert.ok(validateSave(wardrobe));assert.equal(equipCosmetic(wardrobe.career,wardrobe.settings,'invalid'),false);
+console.log('PASS: damaged-save recovery preserves original; cosmetic purchases charge once');

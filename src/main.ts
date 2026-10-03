@@ -7,6 +7,7 @@ import { roster, playerName, personalityName } from './roster';
 import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus } from './tournament';
 import { itemGuideMarkup } from './item-guide';
 import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
+import { cosmetics, equipCosmetic } from './cosmetics';
 import { createSaveStore, checksum } from './shared/save-store';
 import { initialSave, validateSave, type Save } from './save';
 import { rewardNames, type Reward } from './skills';
@@ -54,6 +55,7 @@ function applyPreferences(): void {
   document.documentElement.classList.toggle('force-touch',settings.controls==='touch');
   document.documentElement.dataset.palette = settings.palette;
   game?.configure(settings.quality,settings.reducedMotion);
+  game?.setPlayerColor(cosmetics.find(c=>c.id===settings.palette)!.color);
 }
 const audio = new ArcadeAudio();
 let soundEnabled = audio.enabled;
@@ -219,7 +221,7 @@ function resultMarkup(): string {
 }
 
 function settingsMarkup(): string {
-  const extras = `<div class="setting-row"><span><strong>画质</strong><small>低画质关闭阴影，适合低性能设备</small></span><select aria-label="画质" data-setting="quality"><option value="high" ${settings.quality==='high'?'selected':''}>精细</option><option value="low" ${settings.quality==='low'?'selected':''}>流畅</option></select></div>
+  const extras = `<div class="competition-card"><h3>选手衣橱 · ${career.coins} 奖励币</h3><p>奖励币来自完赛，不同于场内金币的 +5 分。外观不增加战斗属性。</p><div class="cosmetic-grid">${cosmetics.map(c=>`<button class="cosmetic-option ${settings.palette===c.id?'selected':''}" data-cosmetic="${c.id}"><span class="suit-preview" style="--suit:#${c.color.toString(16)}"><i></i></span><strong>${c.name}</strong><small>${settings.palette===c.id?'已装备':settings.unlocked.includes(c.id)?'装备':`${c.price} 奖励币解锁`}</small></button>`).join('')}</div></div><div class="setting-row"><span><strong>画质</strong><small>低画质关闭阴影，适合低性能设备</small></span><select aria-label="画质" data-setting="quality"><option value="high" ${settings.quality==='high'?'selected':''}>精细</option><option value="low" ${settings.quality==='low'?'selected':''}>流畅</option></select></div>
     <button class="setting-row" data-action="toggle-motion"><span><strong>减少动态效果</strong><small>关闭镜头震动与大厅漂浮动画</small></span><b>${settings.reducedMotion?'开启':'关闭'}</b></button>
     <div class="setting-row"><span><strong>操作方式</strong></span><select aria-label="操作方式" data-setting="controls"><option value="auto" ${settings.controls==='auto'?'selected':''}>自动</option><option value="touch" ${settings.controls==='touch'?'selected':''}>显示触控</option></select></div>
     <button class="setting-row" data-action="players"><span><strong>电脑选手</strong><small>63 位选手 · 独立性格与能力</small></span><b>查看 →</b></button>
@@ -232,6 +234,10 @@ function howtoMarkup(): string {
 }
 
 function wireScreen(): void {
+  app.querySelectorAll<HTMLButtonElement>('[data-cosmetic]').forEach(button=>button.addEventListener('click',()=>{
+    if(!equipCosmetic(career,settings,button.dataset.cosmetic??'')){alert('奖励币不足，完成比赛后再来兑换吧');return;}
+    applyPreferences();persist();render();
+  }));
   app.querySelectorAll<HTMLSelectElement>('[data-setting]').forEach(select=>select.addEventListener('change',()=>{
     if(select.dataset.setting==='quality') settings.quality=select.value as 'low'|'high';
     if(select.dataset.setting==='controls') settings.controls=select.value as 'auto'|'touch';
