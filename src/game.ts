@@ -74,6 +74,9 @@ type Explosion = {
   ttl: number;
 };
 
+type ActorData = Omit<Actor, 'group' | 'body' | 'ring' | 'label'>;
+export type GameSnapshot = { mapId: MapId; difficulty: Difficulty; opponents: Contestant[]; tiles: TileKind[][]; actors: ActorData[]; bombs: Bomb[]; items: Item[]; remaining: number; elapsed: number; coinTimer: number; bombId: number; rng: number };
+
 export type GameEvent =
   | { type: 'notice'; text: string }
   | { type: 'bomb-placed' }
@@ -132,6 +135,8 @@ class SeededRandom {
     this.state = (1664525 * this.state + 1013904223) >>> 0;
     return this.state / 4294967296;
   }
+  public exportState(): number { return this.state; }
+  public importState(state: number): void { this.state = state >>> 0; }
 }
 
 export class GameEngine {
@@ -160,6 +165,7 @@ export class GameEngine {
   private coinTimer = 5;
   private mapId: MapId = 'bay';
   private opponents: Contestant[] = roster.slice(0, 3);
+  private reducedMotion = false;
   private shakeTime = 0;
   private shakeStrength = 0;
   private running = false;
@@ -209,6 +215,31 @@ export class GameEngine {
 
   public pause(): void {
     this.running = false;
+  }
+
+  public configure(quality: 'low' | 'high', reducedMotion: boolean): void {
+    this.reducedMotion = reducedMotion;
+    this.renderer.setPixelRatio(quality === 'low' ? 1 : Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = quality === 'high';
+  }
+
+  public snapshot(): GameSnapshot {
+    return structuredClone({ mapId: this.mapId, difficulty: this.difficulty, opponents: this.opponents, tiles: this.tiles, actors: [...this.actors.values()].map(({ group, body, ring, label, ...data }) => data), bombs: this.bombs, items: this.items, remaining: this.remaining, elapsed: this.elapsed, coinTimer: this.coinTimer, bombId: this.bombId, rng: this.rng.exportState() });
+  }
+
+  public restore(snapshot: GameSnapshot): void {
+    const s = structuredClone(snapshot);
+    this.start(s.difficulty, s.mapId, s.opponents);
+    this.clearGroup(this.mapGroup); this.clearGroup(this.actorGroup); this.actors.clear(); this.tileMeshes.clear();
+    this.tiles = s.tiles; this.createMapMeshes();
+    for (const a of s.actors) {
+      this.createActor(a.id, a.name, a.color, a.spawn, a.personality);
+      const actor = this.actors.get(a.id)!; Object.assign(actor, a); actor.group.visible = a.alive && !a.skills.respawning;
+    }
+    this.bombs.splice(0, this.bombs.length, ...s.bombs); this.items.splice(0, this.items.length, ...s.items);
+    this.bombs.forEach(b => this.addBombVisual(b)); this.items.forEach(i => this.createItemMesh(i));
+    this.remaining = s.remaining; this.elapsed = s.elapsed; this.coinTimer = s.coinTimer; this.bombId = s.bombId; this.rng.importState(s.rng);
+    this.updateMeshes(); this.pause();
   }
 
   public resume(): void {
@@ -315,7 +346,7 @@ export class GameEngine {
   }
 
   public render(): void {
-    const shake = this.shakeTime > 0 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? this.shakeStrength * (this.shakeTime / 0.2) : 0;
+    const shake = this.shakeTime > 0 && !this.reducedMotion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? this.shakeStrength * (this.shakeTime / 0.2) : 0;
     this.camera.position.set(
       shake > 0 ? Math.sin(this.elapsed * 91) * shake : 0,
       18,
@@ -349,6 +380,7 @@ export class GameEngine {
   }
 
   public destroy(): void {
+    for (const group of [this.mapGroup,this.actorGroup,this.itemGroup,this.bombGroup,this.warningGroup,this.effectGroup]) this.clearGroup(group);
     this.renderer.dispose();
   }
 
@@ -1033,6 +1065,12 @@ export class GameEngine {
     if (actor.skills.armed) { actor.skills.active = null; actor.skills.armed = false; }
     this.bombs.push(bomb);
     actor.bombsActive += 1;
+    this.addBombVisual(bomb);
+    this.emit({ type: 'bomb-placed' });
+    return true;
+  }
+
+  private addBombVisual(bomb: Bomb): void {
     const mesh = new THREE.Group();
     mesh.userData.bombId = bomb.id;
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 16), new THREE.MeshStandardMaterial({ color: 0x209ff0, roughness: 0.16, metalness: 0.25 }));
@@ -1047,8 +1085,6 @@ export class GameEngine {
     glint.position.set(-0.1, 0.46, 0.17); mesh.add(glint);
     this.bombGroup.add(mesh);
     this.createBombWarning(bomb);
-    this.emit({ type: 'bomb-placed' });
-    return true;
   }
 
   private tryMove(actor: Actor, direction: Direction): boolean {

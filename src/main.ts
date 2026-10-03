@@ -7,6 +7,8 @@ import { roster, playerName, personalityName } from './roster';
 import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus } from './tournament';
 import { itemGuideMarkup } from './item-guide';
 import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
+import { createSaveStore, checksum } from './shared/save-store';
+import { initialSave, validateSave, type Save } from './save';
 import { rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
 import { ArcadeAudio } from './audio';
@@ -26,7 +28,33 @@ let competition: Tournament | null = null;
 let matchMode: 'quick' | 'championship' = 'quick';
 let replaying = false;
 let career = newCareer();
-let quickId = crypto.randomUUID();
+let quickId: string = crypto.randomUUID();
+const saveStore = createSaveStore<Save>('bubble-club:save:v1', validateSave);
+let settings = initialSave().settings;
+let suspended: Save['active'] = null;
+let restoring = false;
+let saveRevision = 0;
+let saveError = '';
+let writeQueue = Promise.resolve();
+
+function persist(): void {
+  if (saveError) return;
+  if (game && !game.getResult()) suspended = { id: quickId, mode: matchMode, snapshot: game.snapshot() };
+  const data: Save = structuredClone({ career, tournament: competition, active: suspended, settings });
+  writeQueue = writeQueue.then(async () => { if (saveError) return; const e = await saveStore.write(data,saveRevision); saveRevision = e.revision; }).catch(error => {
+    saveError = error instanceof Error ? error.message : '存档失败';
+    game?.pause(); holdingBomb = false; heldDirections.clear();
+    showPauseOverlay();
+    alert(`${saveError}。请先导出本页进度备份，再刷新。`);
+  });
+}
+
+function applyPreferences(): void {
+  document.documentElement.classList.toggle('reduce-motion',settings.reducedMotion);
+  document.documentElement.classList.toggle('force-touch',settings.controls==='touch');
+  document.documentElement.dataset.palette = settings.palette;
+  game?.configure(settings.quality,settings.reducedMotion);
+}
 const audio = new ArcadeAudio();
 let soundEnabled = audio.enabled;
 const heldDirections = new Set<Direction>();
@@ -44,6 +72,7 @@ function render(): void {
   app.innerHTML = screenMarkup(screen);
   wireScreen();
   if (screen === 'game') mountGame();
+  applyPreferences();
 }
 
 function screenMarkup(current: Screen): string {
@@ -83,7 +112,7 @@ function homeMarkup(): string {
           <button class="button button-ghost" data-action="settings">设置</button>
         </div>
       </div>
-      <nav class="hub-links" style="grid-column:1/-1"><button data-action="new-tournament">冠军赛</button><button data-action="tournament">赛事签表</button><button data-action="players">选手图鉴</button><button data-action="leaderboard">积分榜</button><button data-action="history">历史战绩</button></nav><div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
+      <nav class="hub-links" style="grid-column:1/-1"><button data-action="new-tournament">冠军赛</button><button data-action="tournament">赛事签表</button><button data-action="players">选手图鉴</button><button data-action="leaderboard">积分榜</button><button data-action="history">历史战绩</button>${suspended ? '<button data-action="continue-save">继续上次比赛</button>' : ''}</nav><div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
     </main>`;
 }
 
@@ -141,6 +170,7 @@ function tournamentMarkup(): string {
 function progressTournament(): void {
   const t = competition;
   if (!t || t.round === 'complete' || t.needsReward) return;
+  if (suspended?.mode === 'championship') { handleAction('continue-save'); return; }
   // Only simulate groups without the user; no parallel Three.js worlds.
   for (const m of t.matches) if (!m.standings && !m.members.includes('player')) submitMatch(t, m, simulate(m.members));
   const match = pendingPlayerMatch(t);
@@ -189,7 +219,12 @@ function resultMarkup(): string {
 }
 
 function settingsMarkup(): string {
-  return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">设置 / SETTINGS</span><span class="topline-spacer"></span></div><section class="simple-content"><p class="eyebrow">SYSTEM CHECK</p><h2>让街区<br><em>更顺手。</em></h2><div class="settings-list"><button class="setting-row" data-action="items"><span><strong>道具图鉴</strong><small>全部 10 种道具 · 效果、释放方式与限制</small></span><b>查看 →</b></button><button class="setting-row" data-action="toggle-sound"><span><strong>声音效果</strong><small>爆炸、拾取和胜负反馈</small></span><b id="sound-label">${soundEnabled ? '开启' : '关闭'}</b></button><div class="setting-row"><span><strong>操作方式</strong><small>键盘 / 触控会自动适配</small></span><b>AUTO</b></div><div class="setting-row"><span><strong>画面风格</strong><small>程序化低多边形 · 原型版</small></span><b>2.5D</b></div></div></section></main>`;
+  const extras = `<div class="setting-row"><span><strong>画质</strong><small>低画质关闭阴影，适合低性能设备</small></span><select aria-label="画质" data-setting="quality"><option value="high" ${settings.quality==='high'?'selected':''}>精细</option><option value="low" ${settings.quality==='low'?'selected':''}>流畅</option></select></div>
+    <button class="setting-row" data-action="toggle-motion"><span><strong>减少动态效果</strong><small>关闭镜头震动与大厅漂浮动画</small></span><b>${settings.reducedMotion?'开启':'关闭'}</b></button>
+    <div class="setting-row"><span><strong>操作方式</strong></span><select aria-label="操作方式" data-setting="controls"><option value="auto" ${settings.controls==='auto'?'selected':''}>自动</option><option value="touch" ${settings.controls==='touch'?'selected':''}>显示触控</option></select></div>
+    <button class="setting-row" data-action="players"><span><strong>电脑选手</strong><small>63 位选手 · 独立性格与能力</small></span><b>查看 →</b></button>
+    <div class="competition-card"><h3>本地存档</h3><p>${saveError ? '⚠ 存档异常，请先导出备份再刷新。' : `版本 1 · 修订 ${saveRevision} · 每 2 秒自动保存比赛`}</p><p>离线存储在当前浏览器；换设备前请导出。德州数据不受影响。</p><div class="page-actions"><button class="button" data-action="export-save">导出存档</button><label class="button">导入存档<input id="save-file" type="file" accept="application/json,.json" style="max-width:180px"></label><button class="button" data-action="restore-backup">恢复上一份备份</button><button class="button" data-action="reset-progress">清空游戏进度</button></div></div>`;
+  return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">设置 / SETTINGS</span><span class="topline-spacer"></span></div><section class="simple-content"><p class="eyebrow">SYSTEM CHECK</p><h2>让街区<br><em>更顺手。</em></h2><div class="settings-list">${extras}<button class="setting-row" data-action="items"><span><strong>道具图鉴</strong><small>全部 10 种道具 · 效果、释放方式与限制</small></span><b>查看 →</b></button><button class="setting-row" data-action="toggle-sound"><span><strong>声音效果</strong><small>爆炸、拾取和胜负反馈</small></span><b id="sound-label">${soundEnabled ? '开启' : '关闭'}</b></button><div class="setting-row"><span><strong>操作方式</strong><small>键盘 / 触控会自动适配</small></span><b>AUTO</b></div><div class="setting-row"><span><strong>画面风格</strong><small>程序化低多边形 · 原型版</small></span><b>2.5D</b></div></div></section></main>`;
 }
 
 function howtoMarkup(): string {
@@ -197,7 +232,19 @@ function howtoMarkup(): string {
 }
 
 function wireScreen(): void {
-  app.querySelectorAll<HTMLButtonElement>('[data-bonus]').forEach(button => button.addEventListener('click', () => { if (competition) { competition.bonus = button.dataset.bonus as Bonus; competition.needsReward = false; render(); } }));
+  app.querySelectorAll<HTMLSelectElement>('[data-setting]').forEach(select=>select.addEventListener('change',()=>{
+    if(select.dataset.setting==='quality') settings.quality=select.value as 'low'|'high';
+    if(select.dataset.setting==='controls') settings.controls=select.value as 'auto'|'touch';
+    applyPreferences(); persist();
+  }));
+  app.querySelector<HTMLInputElement>('#save-file')?.addEventListener('change',async event=>{
+    const input=event.target as HTMLInputElement; const file=input.files?.[0]; if(!file)return;
+    try { if(file.size>5_000_000)throw new Error('文件过大'); const imported=saveStore.parse(await file.text());
+      if(!confirm('导入将覆盖本游戏当前进度，是否继续？'))return;
+      await replaceSave(imported.data); render();
+    } catch(error) { alert(error instanceof Error?error.message:'导入失败'); } finally { input.value=''; }
+  });
+  app.querySelectorAll<HTMLButtonElement>('[data-bonus]').forEach(button => button.addEventListener('click', () => { if (competition) { competition.bonus = button.dataset.bonus as Bonus; competition.needsReward = false; persist(); render(); } }));
   app.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => { selectedMap = button.dataset.map as MapId; render(); }));
   const bombButton = app.querySelector<HTMLButtonElement>('.bomb-button');
   bombButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); bombButton.setPointerCapture(event.pointerId); holdingBomb = true; game?.placePlayerBomb(); });
@@ -219,16 +266,25 @@ function handleAction(action: string): void {
   if (action !== 'bomb') audio.play('click');
   if (!['bomb', 'skill', 'swap'].includes(action)) { heldDirections.clear(); holdingBomb = false; }
   switch (action) {
+    case 'continue-save': if(!suspended)break; restoring=true; matchMode=suspended.mode; quickId=suspended.id; selectedMap=suspended.snapshot.mapId; difficulty=suspended.snapshot.difficulty; opponents=suspended.snapshot.opponents; screen='game'; render(); break;
+    case 'toggle-motion': settings.reducedMotion=!settings.reducedMotion; applyPreferences(); persist(); render(); break;
+    case 'export-save': {
+      const data: Save = { career,tournament:competition,active:suspended,settings };
+      const raw = JSON.stringify({version:1,revision:saveRevision,savedAt:new Date().toISOString(),checksum:checksum(JSON.stringify(data)),data},null,2);
+      const url=URL.createObjectURL(new Blob([raw],{type:'application/json'})); const a=document.createElement('a'); a.href=url;a.download='泡泡大作战存档.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);break;
+    }
+    case 'restore-backup': void restoreBackup(); break;
+    case 'reset-progress': if(confirm('清空泡泡堂的积分、战绩和当前赛事？建议先导出备份。')){stopGame();adoptSave(initialSave());persist();render();}break;
     case 'leaderboard': screen = 'leaderboard'; render(); break;
     case 'history': screen = 'history'; render(); break;
     case 'players': screen = 'players'; render(); break;
-    case 'new-tournament': if (competition && competition.round !== 'complete' && !confirm('放弃当前冠军赛并创建新赛事？')) break; competition = createTournament(difficulty); screen = 'tournament'; render(); break;
+    case 'new-tournament': if (competition && competition.round !== 'complete' && !confirm('放弃当前冠军赛并创建新赛事？')) break; stopGame(); suspended=null; competition = createTournament(difficulty); screen = 'tournament'; render(); break;
     case 'tournament': screen = 'tournament'; render(); break;
     case 'tournament-play': progressTournament(); break;
     case 'skill': game?.usePlayerSkill(); break;
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': screen = 'setup'; render(); break;
-    case 'play': quickId = crypto.randomUUID(); matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'play': stopGame(); suspended=null; quickId = crypto.randomUUID(); matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
     case 'home': stopGame(); screen = 'home'; render(); break;
     case 'howto': screen = 'howto'; render(); break;
@@ -236,7 +292,7 @@ function handleAction(action: string): void {
     case 'items': screen = 'items'; render(); window.scrollTo(0, 0); break;
     case 'back': screen = 'home'; render(); break;
     case 'pause': showPauseOverlay(); break;
-    case 'resume': hidePauseOverlay(); game?.resume(); break;
+    case 'resume': if(saveError){alert(saveError);break;} hidePauseOverlay(); game?.resume(); break;
     case 'restart': quickId = crypto.randomUUID();
       if (matchMode === 'championship') { stopGame(); screen = 'tournament'; render(); break; }
       hidePauseOverlay();
@@ -256,7 +312,25 @@ function handleAction(action: string): void {
     case 'toggle-sound': soundEnabled = audio.toggle(); render(); break;
     default: break;
   }
+  if (['play','new-tournament','tournament-play','home','pause','restart','reset-progress'].includes(action)) persist();
 }
+
+async function replaceSave(data: Save): Promise<void> {
+  await writeQueue;
+  const e = saveError ? await saveStore.recover(data) : await saveStore.write(data,saveRevision);
+  stopGame(); saveRevision=e.revision; saveError=''; adoptSave(e.data);
+}
+
+async function restoreBackup(): Promise<void> {
+  try {
+    const e=saveStore.backup();
+    if(!e){alert('尚无可恢复的备份');return;}
+    if(!confirm('恢复上一份备份？当前进度将被替换。'))return;
+    await replaceSave(e.data); render();
+  } catch(error) { alert(error instanceof Error?error.message:'恢复失败'); }
+}
+
+function adoptSave(data: Save): void { career=data.career;competition=data.tournament;suspended=data.active;settings=data.settings;applyPreferences(); }
 
 function mountGame(): void {
   canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
@@ -265,7 +339,8 @@ function mountGame(): void {
     game = new GameEngine(canvas);
     gameEventUnsubscribe = game.on(handleGameEvent);
   }
-  if (startNewRound) {
+  if(restoring && suspended){game.restore(suspended.snapshot);restoring=false;startNewRound=false;resizeGame();requestAnimationFrame(()=>showPauseOverlay());}
+  else if (startNewRound) {
     game.start(difficulty, selectedMap, opponents);
     if (matchMode === 'championship' && competition && competition.round !== 'first' && !replaying) {
       if (competition.bonus) game.grantBonus('player', competition.bonus);
@@ -284,6 +359,7 @@ function mountGame(): void {
 }
 
 function stopGame(): void {
+  if(game&&!game.getResult()) suspended={id:quickId,mode:matchMode,snapshot:game.snapshot()};
   clearTimeout(resultTimer);
   heldDirections.clear();
   cancelAnimationFrame(animationFrame);
@@ -372,6 +448,7 @@ function handleGameEvent(event: GameEvent): void {
         settleTournament(career,competition);
       }
     }
+    suspended=null; persist();
     heldDirections.clear();
     audio.play(event.result === 'win' ? 'win' : 'lose');
     clearTimeout(resultTimer);
@@ -416,5 +493,8 @@ window.addEventListener('keyup', (event) => {
 });
 window.addEventListener('blur', () => { heldDirections.clear(); showPauseOverlay(); });
 
+try { const e=saveStore.load(); if(e){saveRevision=e.revision;adoptSave(e.data);} } catch(error) { saveError=error instanceof Error?error.message:'无法读取存档'; }
 render();
-document.addEventListener('visibilitychange', () => { if (document.hidden) showPauseOverlay(); });
+setInterval(()=>{if(game?.isRunning())persist();},2000);
+window.addEventListener('storage',event=>{if(event.key===saveStore.key){game?.pause();showPauseOverlay();saveError='其他标签页已更新存档，请刷新后继续';}});
+document.addEventListener('visibilitychange', () => { if (document.hidden) { showPauseOverlay(); if(game)persist(); } });

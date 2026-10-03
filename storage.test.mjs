@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+async function load(path){const b=await build({entryPoints:[path],bundle:true,platform:'node',format:'esm',write:false});return import(`data:text/javascript;base64,${Buffer.from(b.outputFiles[0].text).toString('base64')}`);}
+const {createSaveStore}=await load('src/shared/save-store.ts');
+const {initialSave,validateSave}=await load('src/save.ts');
+const {createTournament,submitMatch,advance}=await load('src/tournament.ts');
+const {settleQuick,settleTournament}=await load('src/career.ts');
+const memory=new Map(); const storage={getItem:k=>memory.get(k)??null,setItem:(k,v)=>memory.set(k,v)};
+const store=createSaveStore('test',validateSave,storage);
+const save=initialSave(); assert.ok(validateSave(save));
+await store.write(save,0); assert.equal(store.load().revision,1);
+await assert.rejects(()=>store.write(save,0),/标签页/);
+await store.write(save,1); assert.equal(store.backup().revision,1);
+assert.throws(()=>store.parse('{"version":3}'));
+assert.equal(validateSave({...save,active:{}}),false);
+const rows=[{id:'player',score:10,hits:1,crates:1,alive:true},{id:'0',score:0,hits:0,crates:0,alive:false}];
+settleQuick(save.career,'quick-1','hard',rows); const points=save.career.points.player;
+assert.equal(points,192);settleQuick(save.career,'quick-1','hard',rows);assert.equal(save.career.points.player,points);
+save.tournament=createTournament('normal');
+while(save.tournament.round!=='complete'){
+  for(const m of save.tournament.matches)submitMatch(save.tournament,m,m.members.map((id,i)=>({id,score:100-i,hits:1,crates:0,alive:true})));
+  advance(save.tournament);settleTournament(save.career,save.tournament);
+  assert.ok(validateSave(save),`valid ${save.tournament.round} save`);
+}
+const before=JSON.stringify(save.career);settleTournament(save.career,save.tournament);assert.equal(JSON.stringify(save.career),before);
+assert.equal(save.career.history.length,2);
+await store.write(save,2);assert.ok(validateSave(store.load().data));
+console.log('PASS: version/checksum validation, backup, conflict, difficulty score, idempotent awards and all tournament save stages');
