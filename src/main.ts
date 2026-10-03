@@ -6,12 +6,13 @@ import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName } from './roster';
 import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus } from './tournament';
 import { itemGuideMarkup } from './item-guide';
+import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
 import { rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
 import { ArcadeAudio } from './audio';
 import { Difficulty, Direction, GameEngine, GameEvent } from './game';
 
-type Screen = 'home' | 'setup' | 'game' | 'pause' | 'result' | 'settings' | 'howto' | 'items' | 'tournament' | 'players';
+type Screen = 'home' | 'setup' | 'game' | 'pause' | 'result' | 'settings' | 'howto' | 'items' | 'tournament' | 'players' | 'leaderboard' | 'history';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) throw new Error('App root not found');
@@ -24,6 +25,8 @@ let opponents = roster.slice(0, 3);
 let competition: Tournament | null = null;
 let matchMode: 'quick' | 'championship' = 'quick';
 let replaying = false;
+let career = newCareer();
+let quickId = crypto.randomUUID();
 const audio = new ArcadeAudio();
 let soundEnabled = audio.enabled;
 const heldDirections = new Set<Direction>();
@@ -54,6 +57,8 @@ function screenMarkup(current: Screen): string {
     case 'items': return itemGuideMarkup();
     case 'tournament': return tournamentMarkup();
     case 'players': return playersMarkup();
+    case 'leaderboard': return leaderboardMarkup();
+    case 'history': return historyMarkup();
     case 'howto': return howtoMarkup();
     default: return homeMarkup();
   }
@@ -78,7 +83,7 @@ function homeMarkup(): string {
           <button class="button button-ghost" data-action="settings">设置</button>
         </div>
       </div>
-      <nav class="hub-links" style="grid-column:1/-1"><button data-action="new-tournament">冠军赛</button><button data-action="tournament">赛事签表</button><button data-action="players">选手图鉴</button></nav><div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
+      <nav class="hub-links" style="grid-column:1/-1"><button data-action="new-tournament">冠军赛</button><button data-action="tournament">赛事签表</button><button data-action="players">选手图鉴</button><button data-action="leaderboard">积分榜</button><button data-action="history">历史战绩</button></nav><div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
     </main>`;
 }
 
@@ -114,6 +119,15 @@ function playersMarkup(): string {
   return page('63 位挑战者', `<p class="competition-note">身份参考德州选手库，泡泡堂性格和能力独立配置。</p><div class="competition-grid">${roster.map(p => `<article class="competition-card"><h3>${p.name}</h3><p>${personalityName[p.personality]} · 智力 ${'★'.repeat(p.intelligence)}</p><small>编号 ${p.id} · ${p.personality === 'brave' ? '优先逼近对手与进攻技能' : p.personality === 'careful' ? '优先逃生与保护技能' : '优先拾取补给、积累能力'}</small></article>`).join('')}</div>`);
 }
 
+function leaderboardMarkup(): string {
+  return page('本地积分榜', `<p class="competition-note">长期积分与战场分数分开：有效命中 +20，单次胜利 +100；晋级 +40 / +80 / +120，冠军 +400。难度倍率 1 / 1.3 / 1.6 / 2。电脑只通过实际或模拟比赛积分。</p><div class="competition-card">${leaderboard(career).map((p,i)=>`<div class="score-row ${p.id === 'player' ? 'you' : ''}"><span>${i+1}</span><strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`).join('')}</div>`);
+}
+
+function historyMarkup(): string {
+  const records = career.history.filter(r=>r.mode==='championship');
+  return page('历史战绩', `<div class="medal-strip">${['冠军','亚军','季军','八强'].map((name,i)=>`<b>${name} ${records.filter(r=>i===3 ? r.place>=5 && r.place<=8 : r.place===i+1).length}</b>`).join('')}</div><p class="competition-note">八强徽章仅计第 5–8 名，不重复累计冠亚季军；第四名保留名次记录。</p><div class="competition-grid">${career.history.length ? career.history.map(r=>`<article class="competition-card"><h3>${r.mode==='quick'?'单次比赛':'冠军赛'} · 第 ${r.place} 名</h3><p>${new Date(r.date).toLocaleString('zh-CN')} · ${r.difficulty}</p><strong>+${r.points} 长期积分</strong><details><summary>查看选手排名</summary>${r.standings.map((p,i)=>`<div class="score-row"><span>${i+1}</span><strong>${playerName(p.id)}</strong><span>${p.score} 分</span></div>`).join('')}</details></article>`).join('') : '<p>还没有完成的比赛。去争取你的第一座奖杯吧。</p>'}</div>`);
+}
+
 function tournamentMarkup(): string {
   const t = competition;
   if (!t) return page('冠军赛', '<p>64 名选手，一座奖杯。</p><button class="button button-primary" data-action="new-tournament">创建赛事</button>');
@@ -130,9 +144,9 @@ function progressTournament(): void {
   // Only simulate groups without the user; no parallel Three.js worlds.
   for (const m of t.matches) if (!m.standings && !m.members.includes('player')) submitMatch(t, m, simulate(m.members));
   const match = pendingPlayerMatch(t);
-  if (!match) { advance(t); screen = 'tournament'; render(); return; }
+  if (!match) { advance(t); settleTournament(career,t); screen = 'tournament'; render(); return; }
   const members = t.replay ?? match.members;
-  if (!members.includes('player')) { submitMatch(t, match, simulate(members)); advance(t); screen = 'tournament'; render(); return; }
+  if (!members.includes('player')) { submitMatch(t, match, simulate(members)); advance(t); settleTournament(career,t); screen = 'tournament'; render(); return; }
   matchMode = 'championship'; difficulty = t.difficulty;
   selectedMap = ['semi','bronze','final'].includes(t.round) ? 'arena' : t.round === 'first' ? 'garden' : 'factory';
   opponents = members.filter(id => id !== 'player').map(id => roster.find(p => p.id === id)!);
@@ -205,6 +219,8 @@ function handleAction(action: string): void {
   if (action !== 'bomb') audio.play('click');
   if (!['bomb', 'skill', 'swap'].includes(action)) { heldDirections.clear(); holdingBomb = false; }
   switch (action) {
+    case 'leaderboard': screen = 'leaderboard'; render(); break;
+    case 'history': screen = 'history'; render(); break;
     case 'players': screen = 'players'; render(); break;
     case 'new-tournament': if (competition && competition.round !== 'complete' && !confirm('放弃当前冠军赛并创建新赛事？')) break; competition = createTournament(difficulty); screen = 'tournament'; render(); break;
     case 'tournament': screen = 'tournament'; render(); break;
@@ -212,7 +228,7 @@ function handleAction(action: string): void {
     case 'skill': game?.usePlayerSkill(); break;
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': screen = 'setup'; render(); break;
-    case 'play': matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'play': quickId = crypto.randomUUID(); matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
     case 'home': stopGame(); screen = 'home'; render(); break;
     case 'howto': screen = 'howto'; render(); break;
@@ -221,7 +237,7 @@ function handleAction(action: string): void {
     case 'back': screen = 'home'; render(); break;
     case 'pause': showPauseOverlay(); break;
     case 'resume': hidePauseOverlay(); game?.resume(); break;
-    case 'restart':
+    case 'restart': quickId = crypto.randomUUID();
       if (matchMode === 'championship') { stopGame(); screen = 'tournament'; render(); break; }
       hidePauseOverlay();
       if (screen === 'result') {
@@ -347,11 +363,13 @@ function handleGameEvent(event: GameEvent): void {
     if (event.actorId === 'player') showToast(event.item === 'coin' ? '拾取金币 +5 分' : `获得 ${rewardNames[event.item]}`);
   }
   if (event.type === 'round-over') {
+    if (matchMode === 'quick' && game) settleQuick(career, quickId, difficulty, game.getStandings());
     if (matchMode === 'championship' && competition && game) {
       const match = pendingPlayerMatch(competition);
       if (match && submitMatch(competition, match, game.getStandings())) {
         for (const m of competition.matches) if (!m.standings) submitMatch(competition, m, simulate(m.members));
         advance(competition);
+        settleTournament(career,competition);
       }
     }
     heldDirections.clear();
