@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mapInfo, type MapId } from './maps';
 import { roster, type Contestant } from './roster';
+import type { Bonus } from './tournament';
 import { MATCH_RULES } from './match-rules';
 import { rewardCanvas } from './reward-icons';
 import { isActive, newSkills, rewardNames, type Reward } from './skills';
@@ -243,7 +244,15 @@ export class GameEngine {
   }
 
   public getStandings() {
-    return [...this.actors.values()].map(a => ({ id: a.id, name: a.name, score: a.score, hits: a.hits, crates: a.crates })).sort((a, b) => b.score - a.score);
+    return [...this.actors.values()].map(a => ({ id: a.id, name: a.name, score: a.score, hits: a.hits, crates: a.crates, alive: a.alive })).sort((a, b) => b.score - a.score);
+  }
+
+  public grantBonus(id: string, bonus: Bonus): void {
+    const actor = this.actors.get(id);
+    if (!actor) return;
+    if (bonus === 'capacity') actor.bombCapacity++;
+    if (bonus === 'speed') actor.speed = 1.1;
+    if (bonus === 'shield') actor.skills.shield = true;
   }
 
   private award(id: string, kind: 'hit' | 'crate'): void {

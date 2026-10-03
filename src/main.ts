@@ -3,14 +3,15 @@ import './arcade.css';
 import './skills.css';
 import './competition.css';
 import { maps, mapInfo, type MapId } from './maps';
-import { roster } from './roster';
+import { roster, playerName, personalityName } from './roster';
+import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus } from './tournament';
 import { itemGuideMarkup } from './item-guide';
 import { rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
 import { ArcadeAudio } from './audio';
 import { Difficulty, Direction, GameEngine, GameEvent } from './game';
 
-type Screen = 'home' | 'setup' | 'game' | 'pause' | 'result' | 'settings' | 'howto' | 'items';
+type Screen = 'home' | 'setup' | 'game' | 'pause' | 'result' | 'settings' | 'howto' | 'items' | 'tournament' | 'players';
 
 const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) throw new Error('App root not found');
@@ -20,6 +21,9 @@ let screen: Screen = 'home';
 let difficulty: Difficulty = 'normal';
 let selectedMap: MapId = 'bay';
 let opponents = roster.slice(0, 3);
+let competition: Tournament | null = null;
+let matchMode: 'quick' | 'championship' = 'quick';
+let replaying = false;
 const audio = new ArcadeAudio();
 let soundEnabled = audio.enabled;
 const heldDirections = new Set<Direction>();
@@ -48,6 +52,8 @@ function screenMarkup(current: Screen): string {
     case 'result': return resultMarkup();
     case 'settings': return settingsMarkup();
     case 'items': return itemGuideMarkup();
+    case 'tournament': return tournamentMarkup();
+    case 'players': return playersMarkup();
     case 'howto': return howtoMarkup();
     default: return homeMarkup();
   }
@@ -72,7 +78,7 @@ function homeMarkup(): string {
           <button class="button button-ghost" data-action="settings">设置</button>
         </div>
       </div>
-      <div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
+      <nav class="hub-links" style="grid-column:1/-1"><button data-action="new-tournament">冠军赛</button><button data-action="tournament">赛事签表</button><button data-action="players">选手图鉴</button></nav><div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
     </main>`;
 }
 
@@ -98,6 +104,40 @@ function setupMarkup(): string {
 
 function difficultyButton(value: Difficulty, title: string, caption: string): string {
   return `<button class="difficulty ${difficulty === value ? 'selected' : ''}" data-difficulty="${value}"><strong>${title}</strong><small>${caption}</small></button>`;
+}
+
+function page(title: string, content: string): string {
+  return `<main class="screen"><div class="topline"><button class="icon-button" data-action="home" aria-label="返回大厅">←</button><span class="screen-kicker">BUBBLE CLUB</span></div><section class="competition-content"><h1>${title}</h1>${content}</section></main>`;
+}
+
+function playersMarkup(): string {
+  return page('63 位挑战者', `<p class="competition-note">身份参考德州选手库，泡泡堂性格和能力独立配置。</p><div class="competition-grid">${roster.map(p => `<article class="competition-card"><h3>${p.name}</h3><p>${personalityName[p.personality]} · 智力 ${'★'.repeat(p.intelligence)}</p><small>编号 ${p.id} · ${p.personality === 'brave' ? '优先逼近对手与进攻技能' : p.personality === 'careful' ? '优先逃生与保护技能' : '优先拾取补给、积累能力'}</small></article>`).join('')}</div>`);
+}
+
+function tournamentMarkup(): string {
+  const t = competition;
+  if (!t) return page('冠军赛', '<p>64 名选手，一座奖杯。</p><button class="button button-primary" data-action="new-tournament">创建赛事</button>');
+  const order = tournamentOrder(t);
+  const groups = [...t.archive, ...(t.round === 'complete' ? [] : [{ round: t.round, matches: t.matches }])];
+  return page(t.round === 'complete' ? '冠军诞生' : roundNames[t.round], `<p class="competition-note">64 → 16 → 4 → 2 · 电脑组快速模拟，玩家组实际对战。晋级同分安排加赛；决赛先胜两局夺冠。</p>
+    ${t.round === 'complete' ? `<div class="medal-strip">${order.slice(0, 4).map((id, i) => `<b>${['冠军','亚军','季军','第四名'][i]} · ${playerName(id)}</b>`).join('')}</div><p>你的名次：第 ${order.indexOf('player') + 1} 名</p>` : `<div class="page-actions">${t.needsReward ? (['capacity','speed','shield'] as Bonus[]).map(b => `<button class="button button-primary" data-bonus="${b}">下一场：${b === 'capacity' ? '容量 +1' : b === 'speed' ? '速度 +1 档' : '一次护盾'}</button>`).join('') : `<button class="button button-primary" data-action="tournament-play">${pendingPlayerMatch(t) ? t.replay ? '进入同分加赛' : '进入我的比赛' : '模拟其余比赛并继续'}</button>`}</div>`}
+    <div class="competition-grid">${groups.flatMap(g => g.matches.map((m, i) => `<article class="competition-card"><strong>${roundNames[g.round]} · 第 ${i + 1} 组${m.members.includes('player') ? ' · 我的组' : ''}</strong>${(m.standings ?? m.members.map(id => ({ id, score: null }))).map(p => `<div class="score-row ${p.id === 'player' ? 'you' : ''}"><strong>${playerName(p.id)}</strong><span>${p.score ?? '待赛'}</span>${m.winner === p.id ? '<b>晋级</b>' : ''}</div>`).join('')}</article>`)).join('')}</div>`);
+}
+
+function progressTournament(): void {
+  const t = competition;
+  if (!t || t.round === 'complete' || t.needsReward) return;
+  // Only simulate groups without the user; no parallel Three.js worlds.
+  for (const m of t.matches) if (!m.standings && !m.members.includes('player')) submitMatch(t, m, simulate(m.members));
+  const match = pendingPlayerMatch(t);
+  if (!match) { advance(t); screen = 'tournament'; render(); return; }
+  const members = t.replay ?? match.members;
+  if (!members.includes('player')) { submitMatch(t, match, simulate(members)); advance(t); screen = 'tournament'; render(); return; }
+  matchMode = 'championship'; difficulty = t.difficulty;
+  selectedMap = ['semi','bronze','final'].includes(t.round) ? 'arena' : t.round === 'first' ? 'garden' : 'factory';
+  opponents = members.filter(id => id !== 'player').map(id => roster.find(p => p.id === id)!);
+  replaying = !!t.replay;
+  stopGame(); startNewRound = true; screen = 'game'; render();
 }
 
 function gameMarkup(): string {
@@ -131,7 +171,7 @@ function resultMarkup(): string {
   const standings = game?.getStandings() ?? [];
   const copy = result === 'win' ? ['本场获胜！', '成为最后的存活者，或超时以最高分胜出。'] : result === 'lose' ? ['比赛结束', '下次争取更多有效命中。'] : ['本场平局', '存活者最高分并列，或所有选手同归于尽。'];
   copy[1] += `<br>${standings.map(a => `${a.name}：${a.score} 分（命中 ${a.hits} · 炸箱 ${a.crates}）`).join('<br>')}`;
-  return `<main class="screen result-screen result-${result}"><div class="result-burst">${result === 'win' ? '✦' : result === 'lose' ? '×' : '•'}</div><p class="eyebrow">ROUND COMPLETE · ${result.toUpperCase()}</p><h1>${copy[0]}</h1><p class="result-copy">${copy[1]}</p><div class="result-actions"><button class="button button-primary button-large" data-action="restart">再来一局 <span>→</span></button><button class="button button-ghost" data-action="home">返回主菜单</button></div><div class="result-note">NO LOGIN · LOCAL SCORE</div></main>`;
+  return `<main class="screen result-screen result-${result}"><div class="result-burst">${result === 'win' ? '✦' : result === 'lose' ? '×' : '•'}</div><p class="eyebrow">ROUND COMPLETE · ${result.toUpperCase()}</p><h1>${copy[0]}</h1><p class="result-copy">${copy[1]}</p><div class="result-actions"><button class="button button-primary button-large" data-action="restart">${matchMode === 'championship' ? '返回赛事签表' : '再来一局'} <span>→</span></button><button class="button button-ghost" data-action="home">返回主菜单</button></div><div class="result-note">NO LOGIN · LOCAL SCORE</div></main>`;
 }
 
 function settingsMarkup(): string {
@@ -143,6 +183,7 @@ function howtoMarkup(): string {
 }
 
 function wireScreen(): void {
+  app.querySelectorAll<HTMLButtonElement>('[data-bonus]').forEach(button => button.addEventListener('click', () => { if (competition) { competition.bonus = button.dataset.bonus as Bonus; competition.needsReward = false; render(); } }));
   app.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => { selectedMap = button.dataset.map as MapId; render(); }));
   const bombButton = app.querySelector<HTMLButtonElement>('.bomb-button');
   bombButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); bombButton.setPointerCapture(event.pointerId); holdingBomb = true; game?.placePlayerBomb(); });
@@ -164,10 +205,14 @@ function handleAction(action: string): void {
   if (action !== 'bomb') audio.play('click');
   if (!['bomb', 'skill', 'swap'].includes(action)) { heldDirections.clear(); holdingBomb = false; }
   switch (action) {
+    case 'players': screen = 'players'; render(); break;
+    case 'new-tournament': if (competition && competition.round !== 'complete' && !confirm('放弃当前冠军赛并创建新赛事？')) break; competition = createTournament(difficulty); screen = 'tournament'; render(); break;
+    case 'tournament': screen = 'tournament'; render(); break;
+    case 'tournament-play': progressTournament(); break;
     case 'skill': game?.usePlayerSkill(); break;
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': screen = 'setup'; render(); break;
-    case 'play': opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'play': matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
     case 'home': stopGame(); screen = 'home'; render(); break;
     case 'howto': screen = 'howto'; render(); break;
@@ -177,6 +222,7 @@ function handleAction(action: string): void {
     case 'pause': showPauseOverlay(); break;
     case 'resume': hidePauseOverlay(); game?.resume(); break;
     case 'restart':
+      if (matchMode === 'championship') { stopGame(); screen = 'tournament'; render(); break; }
       hidePauseOverlay();
       if (screen === 'result') {
         stopGame();
@@ -205,6 +251,11 @@ function mountGame(): void {
   }
   if (startNewRound) {
     game.start(difficulty, selectedMap, opponents);
+    if (matchMode === 'championship' && competition && competition.round !== 'first' && !replaying) {
+      if (competition.bonus) game.grantBonus('player', competition.bonus);
+      opponents.forEach(p => game?.grantBonus(p.id, p.personality === 'careful' ? 'shield' : p.personality === 'collector' ? 'capacity' : 'speed'));
+      competition.bonus = null;
+    }
     startNewRound = false;
   } else {
     game.resume();
@@ -296,6 +347,13 @@ function handleGameEvent(event: GameEvent): void {
     if (event.actorId === 'player') showToast(event.item === 'coin' ? '拾取金币 +5 分' : `获得 ${rewardNames[event.item]}`);
   }
   if (event.type === 'round-over') {
+    if (matchMode === 'championship' && competition && game) {
+      const match = pendingPlayerMatch(competition);
+      if (match && submitMatch(competition, match, game.getStandings())) {
+        for (const m of competition.matches) if (!m.standings) submitMatch(competition, m, simulate(m.members));
+        advance(competition);
+      }
+    }
     heldDirections.clear();
     audio.play(event.result === 'win' ? 'win' : 'lose');
     clearTimeout(resultTimer);
