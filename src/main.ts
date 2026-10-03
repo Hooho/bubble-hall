@@ -1,6 +1,9 @@
 import './style.css';
 import './arcade.css';
 import './skills.css';
+import './competition.css';
+import { maps, mapInfo, type MapId } from './maps';
+import { roster } from './roster';
 import { itemGuideMarkup } from './item-guide';
 import { rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
@@ -15,6 +18,8 @@ const app: HTMLDivElement = appRoot;
 
 let screen: Screen = 'home';
 let difficulty: Difficulty = 'normal';
+let selectedMap: MapId = 'bay';
+let opponents = roster.slice(0, 3);
 const audio = new ArcadeAudio();
 let soundEnabled = audio.enabled;
 const heldDirections = new Set<Direction>();
@@ -78,9 +83,9 @@ function setupMarkup(): string {
       <section class="setup-layout">
         <div class="setup-intro"><p class="eyebrow">MATCH SETUP</p><h2>选好你的<br><em>战术。</em></h2><p>通用比赛规则：每场 3 分钟。炸箱 +10，命中对手 +100。死亡即淘汰；最后一人提前获胜，否则超时比较存活者积分；自爆和无敌期间受击不计分。</p></div>
         <div class="setup-panel">
-          <div class="setup-block"><div class="field-label">地图 / MAP</div><button class="map-choice active"><span class="map-thumb">✦</span><span><strong>街角花园</strong><small>四路相通 · 木箱密度 28%</small></span><i>✓</i></button></div>
+          <div class="setup-block"><div class="field-label">地图 / MAP</div><div class="map-grid">${maps.map(m => `<button class="map-option ${selectedMap === m.id ? 'selected' : ''}" data-map="${m.id}"><strong>${m.name}</strong><small>${m.caption}</small></button>`).join('')}<button class="map-option" data-action="random-map">随机地图 ↻</button></div></div>
           <div class="setup-block"><div class="field-label">电脑难度 / AI</div><div class="difficulty-row">
-            ${difficultyButton('easy', '轻松', '反应慢 · 适合熟悉规则')}${difficultyButton('normal', '标准', '会躲避 · 会追击')}${difficultyButton('hard', '狠一点', '会封路 · 不会作弊')}
+            ${difficultyButton('easy', '轻松', '反应慢 · 适合熟悉规则')}${difficultyButton('normal', '标准', '会躲避 · 会追击')}${difficultyButton('hard', '困难', '会封路 · 不会作弊')}${difficultyButton('master', '大师', '快速判断 · 熟练用技能')}
           </div></div>
           <div class="skill-guide"><strong>本场开放技能补给</strong><p>炸箱获取成长、护盾、额外生命和主动技能。E 释放技能，F 替换脚下道具；手机使用独立技能按钮。</p><p>无敌 3 秒 · 疾跑 5 秒 · 连发 4 秒（按住放弹）<br>超级炸弹：先准备，再放弹，可穿透一个箱子。</p></div>
           <div class="reward-gallery">${(Object.keys(rewardNames) as Reward[]).map(kind => `<div>${rewardIcon(kind)}<small>${rewardNames[kind]}</small></div>`).join('')}</div>
@@ -101,7 +106,7 @@ function gameMarkup(): string {
   return `
     <main class="screen game-screen">
       <div class="game-topbar">
-        <div class="match-id"><span class="live-dot"></span><span>街角花园</span><small>SOLO RUN</small></div>
+        <div class="match-id"><span class="live-dot"></span><span>${mapInfo(selectedMap).name}</span><small>SOLO RUN</small></div>
         <div class="round-clock"><small>ROUND TIME</small><strong id="timer">03:00</strong></div>
         <div class="game-actions"><button class="mini-action" data-action="pause">Ⅱ</button><button class="mini-action desktop-only" data-action="restart">↻</button></div>
       </div>
@@ -138,6 +143,7 @@ function howtoMarkup(): string {
 }
 
 function wireScreen(): void {
+  app.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => { selectedMap = button.dataset.map as MapId; render(); }));
   const bombButton = app.querySelector<HTMLButtonElement>('.bomb-button');
   bombButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); bombButton.setPointerCapture(event.pointerId); holdingBomb = true; game?.placePlayerBomb(); });
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) bombButton?.addEventListener(event, () => { holdingBomb = false; });
@@ -161,7 +167,8 @@ function handleAction(action: string): void {
     case 'skill': game?.usePlayerSkill(); break;
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': screen = 'setup'; render(); break;
-    case 'play': audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'play': opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
     case 'home': stopGame(); screen = 'home'; render(); break;
     case 'howto': screen = 'howto'; render(); break;
     case 'settings': screen = 'settings'; render(); break;
@@ -177,7 +184,7 @@ function handleAction(action: string): void {
         screen = 'game';
         render();
       } else if (game) {
-        game.start(difficulty);
+        game.start(difficulty, selectedMap, opponents);
         startNewRound = false;
         screen = 'game';
         updateHud();
@@ -197,7 +204,7 @@ function mountGame(): void {
     gameEventUnsubscribe = game.on(handleGameEvent);
   }
   if (startNewRound) {
-    game.start(difficulty);
+    game.start(difficulty, selectedMap, opponents);
     startNewRound = false;
   } else {
     game.resume();

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { mapInfo, type MapId } from './maps';
+import { roster, type Contestant } from './roster';
 import { MATCH_RULES } from './match-rules';
 import { rewardCanvas } from './reward-icons';
 import { isActive, newSkills, rewardNames, type Reward } from './skills';
@@ -7,7 +9,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 export const BOARD_WIDTH = 13;
 export const BOARD_HEIGHT = 11;
 
-export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'master';
 export type Direction = 'up' | 'down' | 'left' | 'right';
 export type TileKind = 'floor' | 'wall' | 'crate';
 export type ItemKind = Reward;
@@ -38,6 +40,7 @@ type Item = {
 };
 
 type Actor = {
+  intelligence: number;
   score: number;
   hits: number;
   crates: number;
@@ -154,6 +157,8 @@ export class GameEngine {
   private elapsed = 0;
   private remaining: number = MATCH_RULES.duration;
   private coinTimer = 5;
+  private mapId: MapId = 'bay';
+  private opponents: Contestant[] = roster.slice(0, 3);
   private shakeTime = 0;
   private shakeStrength = 0;
   private running = false;
@@ -193,7 +198,9 @@ export class GameEngine {
     return () => this.listeners.delete(listener);
   }
 
-  public start(difficulty: Difficulty): void {
+  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3)): void {
+    this.mapId = mapId;
+    this.opponents = opponents;
     this.difficulty = difficulty;
     this.resetWorld();
     this.running = true;
@@ -359,9 +366,10 @@ export class GameEngine {
 
     this.createMapMeshes();
     this.createActor('player', '你', ACTOR_COLORS.player, SPAWNS[0], 'careful');
-    this.createActor('ruby', '赤焰', ACTOR_COLORS.ruby, SPAWNS[1], 'brave');
-    this.createActor('cyan', '潮汐', ACTOR_COLORS.cyan, SPAWNS[2], 'collector');
-    this.createActor('violet', '紫电', ACTOR_COLORS.violet, SPAWNS[3], 'careful');
+    this.opponents.forEach((p, i) => {
+      this.createActor(p.id, p.name, p.color, SPAWNS[i + 1], p.personality);
+      this.actors.get(p.id)!.intelligence = p.intelligence;
+    });
     this.updateMeshes();
   }
 
@@ -390,7 +398,8 @@ export class GameEngine {
       for (let x = 0; x < BOARD_WIDTH; x += 1) {
         const isBorder = x === 0 || y === 0 || x === BOARD_WIDTH - 1 || y === BOARD_HEIGHT - 1;
         const isPillar = x % 2 === 0 && y % 2 === 0;
-        if (isBorder || isPillar) map[y][x] = 'wall';
+        const pillar = this.mapId === 'arena' ? isPillar && x !== 6 && y !== 4 && y !== 6 : this.mapId === 'garden' ? isPillar && x > 2 && x < 10 && y > 2 && y < 8 : isPillar;
+        if (isBorder || pillar) map[y][x] = 'wall';
       }
     }
 
@@ -398,7 +407,10 @@ export class GameEngine {
     for (let y = 1; y < BOARD_HEIGHT - 1; y += 1) {
       for (let x = 1; x < BOARD_WIDTH - 1; x += 1) {
         if (map[y][x] !== 'floor' || spawnSafe(x, y)) continue;
-        if (random.next() < 0.28) map[y][x] = 'crate';
+        if (this.mapId === 'factory' && (x === 6 || y === 5)) continue;
+        // Mirror obstacles for equal spawn opportunities.
+        if (x > 6 || y > 5) { map[y][x] = map[Math.min(y, 10 - y)][Math.min(x, 12 - x)]; continue; }
+        if (random.next() < mapInfo(this.mapId).density) map[y][x] = 'crate';
       }
     }
 
@@ -416,12 +428,13 @@ export class GameEngine {
 
   private createMapMeshes(): void {
     const material = (color: number, roughness = 0.45) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
-    const floors = [material(0xe6f0f3, 0.85), material(0xf3f7f5, 0.85)];
+    const theme = mapInfo(this.mapId);
+    const floors = [material(theme.floor, 0.85), material(0xf3f7f5, 0.85)];
     const wallMaterial = material(0x639cb8);
-    const wallCapMaterial = material(0x91d2e6, 0.28);
+    const wallCapMaterial = material(theme.wall, 0.28);
     const porcelain = material(0xf3fcff, 0.3);
     const crateMaterial = material(0xce924d, 0.7);
-    const crateCapMaterial = material(0xf1c780, 0.65);
+    const crateCapMaterial = material(theme.crate, 0.65);
     const strapMaterial = material(0xfff0cc, 0.7);
     const claspMaterial = material(0x9e6c35, 0.4);
     const rounded = (w: number, h: number, d: number, m: THREE.Material, radius = 0.06) =>
@@ -507,6 +520,7 @@ export class GameEngine {
     this.actorGroup.add(group);
     this.actors.set(id, {
       score: 0, hits: 0, crates: 0, respawnDelay: 0,
+      intelligence: 3,
       skills: newSkills(),
       id,
       name,
@@ -587,7 +601,7 @@ export class GameEngine {
       }
 
       if (actor.decisionCooldown <= 0) {
-        actor.decisionCooldown = this.difficulty === 'easy' ? 0.5 : this.difficulty === 'hard' ? 0.12 : 0.24;
+        actor.decisionCooldown = (this.difficulty === 'easy' ? 0.5 : this.difficulty === 'master' ? 0.09 : this.difficulty === 'hard' ? 0.15 : 0.28) * (1.3 - actor.intelligence * 0.1);
         this.decideBot(actor);
       }
     }
