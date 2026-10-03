@@ -651,17 +651,19 @@ export class GameEngine {
   private decideBot(bot: Actor): void {
     const danger = this.getDangerKeys();
 
-    const player = this.actors.get('player');
+    const player = [...this.actors.values()]
+      .filter(actor => actor.id !== bot.id && actor.alive)
+      .sort((a,b) => distance(bot.position,a.position) - distance(bot.position,b.position))[0];
     const nearestCrate = this.findNearest(bot.position, (position) => Object.values(DIRECTIONS).some((direction) => {
       const adjacent = { x: position.x + direction.x, y: position.y + direction.y };
       return this.inBounds(adjacent) && this.tiles[adjacent.y][adjacent.x] === 'crate';
     }));
-    const nearestItem = bot.personality === 'collector'
+    const nearestItem = bot.personality === 'collector' || bot.bombCapacity === 1
       ? this.findNearest(bot.position, (position) => this.items.some((item) => samePosition(item.position, position)))
       : null;
     const nearPlayer = player?.alive && distance(bot.position, player.position) <= 5;
     const canBomb = bot.bombsActive < bot.bombCapacity && this.canEscapeAfterBomb(bot);
-    const wantsAttack = bot.personality === 'brave' || (bot.personality === 'careful' && nearPlayer);
+    const wantsAttack = bot.personality === 'brave' || !!nearPlayer || !nearestCrate;
 
     if (canBomb && ((nearPlayer && wantsAttack) || (nearestCrate && distance(bot.position, nearestCrate) <= 2))) {
       if (this.placeBomb(bot)) {
