@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { MATCH_RULES } from './match-rules';
+import { rewardCanvas } from './reward-icons';
+import { isActive, newSkills, rewardNames, type Reward } from './skills';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export const BOARD_WIDTH = 13;
 export const BOARD_HEIGHT = 11;
@@ -6,7 +10,7 @@ export const BOARD_HEIGHT = 11;
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type Direction = 'up' | 'down' | 'left' | 'right';
 export type TileKind = 'floor' | 'wall' | 'crate';
-export type ItemKind = 'bomb' | 'flame' | 'speed';
+export type ItemKind = Reward;
 
 export type GridPosition = { x: number; y: number };
 
@@ -16,9 +20,10 @@ type Bomb = {
   position: GridPosition;
   timer: number;
   range: number;
+  piercing?: boolean;
 };
 
-type BombPrediction = Pick<Bomb, 'position' | 'timer' | 'range'>;
+type BombPrediction = Pick<Bomb, 'position' | 'timer' | 'range' | 'piercing'>;
 
 type ExplosionPattern = {
   center: GridPosition;
@@ -33,6 +38,11 @@ type Item = {
 };
 
 type Actor = {
+  score: number;
+  hits: number;
+  crates: number;
+  respawnDelay: number;
+  skills: ReturnType<typeof newSkills>;
   id: string;
   name: string;
   color: number;
@@ -61,6 +71,9 @@ type Explosion = {
 };
 
 export type GameEvent =
+  | { type: 'notice'; text: string }
+  | { type: 'bomb-placed' }
+  | { type: 'explosion' }
   | { type: 'actor-died'; actorId: string }
   | { type: 'item-picked'; actorId: string; item: ItemKind }
   | { type: 'round-over'; result: 'win' | 'lose' | 'draw' };
@@ -139,7 +152,8 @@ export class GameEngine {
   private tiles: TileKind[][] = [];
   private bombId = 0;
   private elapsed = 0;
-  private remaining = 180;
+  private remaining: number = MATCH_RULES.duration;
+  private coinTimer = 5;
   private shakeTime = 0;
   private shakeStrength = 0;
   private running = false;
@@ -155,16 +169,19 @@ export class GameEngine {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene.background = new THREE.Color(0xf4faff);
-    this.scene.fog = new THREE.Fog(0xf4faff, 16, 34);
     this.scene.add(this.world);
     this.world.add(this.mapGroup, this.itemGroup, this.warningGroup, this.bombGroup, this.actorGroup, this.effectGroup);
 
-    const ambient = new THREE.HemisphereLight(0xffffff, 0x7895b8, 2.5);
+    const ambient = new THREE.HemisphereLight(0xffffff, 0x7895b8, 1.6);
     this.scene.add(ambient);
-    const keyLight = new THREE.DirectionalLight(0xd9edff, 3.8);
-    keyLight.position.set(-6, 14, 7);
+    const keyLight = new THREE.DirectionalLight(0xfff9ee, 1.7);
+    keyLight.position.set(-3, 18, 4);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.intensity = 0.35;
+    Object.assign(keyLight.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 });
+    keyLight.shadow.normalBias = 0.04;
+    keyLight.shadow.radius = 3;
     this.scene.add(keyLight);
 
     this.camera.position.set(0, 18, 9);
@@ -218,6 +235,45 @@ export class GameEngine {
       .map((actor) => ({ name: actor.name, alive: actor.alive, color: `#${actor.color.toString(16).padStart(6, '0')}` }));
   }
 
+  public getStandings() {
+    return [...this.actors.values()].map(a => ({ id: a.id, name: a.name, score: a.score, hits: a.hits, crates: a.crates })).sort((a, b) => b.score - a.score);
+  }
+
+  private award(id: string, kind: 'hit' | 'crate'): void {
+    const actor = this.actors.get(id);
+    if (!actor) return;
+    actor.score += kind === 'hit' ? MATCH_RULES.hitPoints : MATCH_RULES.cratePoints;
+    if (kind === 'hit') actor.hits++; else actor.crates++;
+    if (id === 'player') this.emit({ type: 'notice', text: kind === 'hit' ? '命中对手 +100 分' : '炸开补给箱 +10 分' });
+  }
+
+  public getSkillStats() {
+    const actor = this.actors.get('player');
+    const item = this.items.find((item) => actor && samePosition(item.position, actor.position) && isActive(item.kind));
+    return { ...(actor?.skills ?? newSkills()), swap: item && actor?.skills.active && !actor.skills.armed ? rewardNames[item.kind] : null };
+  }
+
+  public usePlayerSkill(): void {
+    const actor = this.actors.get('player');
+    if (actor && this.running) this.useSkill(actor);
+  }
+
+  public replacePlayerSkill(): void {
+    const actor = this.actors.get('player');
+    if (actor && this.running && !actor.skills.armed) this.collectItem(actor, true);
+  }
+
+  private useSkill(actor: Actor): void {
+    const s = actor.skills;
+    if (!actor.alive || s.respawning || !s.active) return;
+    if (s.active === 'super') { s.armed = !s.armed; return; }
+    if (s.active === 'invincible') s.invincible = 3;
+    if (s.active === 'dash') s.dash = 5;
+    if (s.active === 'rapid') s.rapid = 4;
+    if (actor.id === 'player') this.emit({ type: 'notice', text: `${rewardNames[s.active]}已启动` });
+    s.active = null;
+  }
+
   public update(delta: number): void {
     const safeDelta = Math.min(delta, 0.08);
     if (!this.running) {
@@ -227,18 +283,23 @@ export class GameEngine {
 
     this.elapsed += safeDelta;
     this.remaining = Math.max(0, this.remaining - safeDelta);
+    this.coinTimer -= safeDelta;
+    if (this.coinTimer <= 0 && this.remaining > 0) {
+      this.spawnCoin();
+      this.coinTimer = 5 + this.rng.next() * 4;
+    }
     this.updateActors(safeDelta);
     this.updateBombs(safeDelta);
     this.updateEffects(safeDelta);
     this.updateMeshes();
 
     if (this.remaining <= 0 && !this.result) {
-      this.finishRound('draw');
+      this.checkRoundEnd();
     }
   }
 
   public render(): void {
-    const shake = this.shakeTime > 0 ? this.shakeStrength * (this.shakeTime / 0.2) : 0;
+    const shake = this.shakeTime > 0 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? this.shakeStrength * (this.shakeTime / 0.2) : 0;
     this.camera.position.set(
       shake > 0 ? Math.sin(this.elapsed * 91) * shake : 0,
       18,
@@ -250,7 +311,7 @@ export class GameEngine {
 
   public resize(width: number, height: number): void {
     const aspect = width / Math.max(height, 1);
-    const viewHeight = aspect < 0.85 ? 17.5 : aspect < 1.15 ? 15.5 : 13.5;
+    const viewHeight = Math.max(11.2, 13.8 / aspect);
     this.camera.left = (-viewHeight * aspect) / 2;
     this.camera.right = (viewHeight * aspect) / 2;
     this.camera.top = viewHeight / 2;
@@ -284,7 +345,8 @@ export class GameEngine {
     this.tileMeshes.clear();
     this.bombId = 0;
     this.elapsed = 0;
-    this.remaining = 180;
+    this.remaining = MATCH_RULES.duration;
+    this.coinTimer = 5;
     this.shakeTime = 0;
     this.shakeStrength = 0;
     this.result = null;
@@ -313,7 +375,8 @@ export class GameEngine {
   private disposeObject(object: THREE.Object3D): void {
     object.traverse((child) => {
       const disposable = child as THREE.Mesh & { material?: THREE.Material | THREE.Material[] };
-      disposable.geometry?.dispose();
+      if (!(child instanceof THREE.Sprite)) disposable.geometry?.dispose();
+      if (child instanceof THREE.Sprite) child.material.map?.dispose();
       if (Array.isArray(disposable.material)) disposable.material.forEach((material) => material.dispose());
       else disposable.material?.dispose();
     });
@@ -352,58 +415,56 @@ export class GameEngine {
   }
 
   private createMapMeshes(): void {
-    const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xf8fcff, roughness: 0.96, metalness: 0 });
-    const floorLineMaterial = new THREE.MeshBasicMaterial({ color: 0xaec9e4, transparent: true, opacity: 0.96 });
-    const floorMarkerMaterial = new THREE.MeshBasicMaterial({ color: 0x8eadd0, transparent: true, opacity: 0.78 });
-    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x173d73, roughness: 0.68, metalness: 0.12 });
-    const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0x2f80ed, roughness: 0.48, metalness: 0.14 });
-    const wallEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0xe7f5ff, transparent: true, opacity: 0.9 });
-    const wallMarkMaterial = new THREE.MeshBasicMaterial({ color: 0xd8eeff });
-    const crateMaterial = new THREE.MeshStandardMaterial({ color: 0xd9823b, roughness: 0.82, metalness: 0.02 });
-    const crateCapMaterial = new THREE.MeshStandardMaterial({ color: 0xffc86b, roughness: 0.7 });
-    const crateAccentMaterial = new THREE.MeshBasicMaterial({ color: 0x236fd1 });
+    const material = (color: number, roughness = 0.45) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+    const floors = [material(0xe6f0f3, 0.85), material(0xf3f7f5, 0.85)];
+    const wallMaterial = material(0x639cb8);
+    const wallCapMaterial = material(0x91d2e6, 0.28);
+    const porcelain = material(0xf3fcff, 0.3);
+    const crateMaterial = material(0xce924d, 0.7);
+    const crateCapMaterial = material(0xf1c780, 0.65);
+    const strapMaterial = material(0xfff0cc, 0.7);
+    const claspMaterial = material(0x9e6c35, 0.4);
+    const rounded = (w: number, h: number, d: number, m: THREE.Material, radius = 0.06) =>
+      new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, radius), m);
+    const tray = rounded(13.3, 0.22, 11.3, material(0xb9d4df), 0.1);
+    tray.position.y = -0.29;
+    tray.receiveShadow = true;
+    this.mapGroup.add(tray);
 
     for (let y = 0; y < BOARD_HEIGHT; y += 1) {
       for (let x = 0; x < BOARD_WIDTH; x += 1) {
         const position = { x, y };
-        const floor = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.9), floorMaterial);
+        const floor = rounded(0.98, 0.07, 0.98, floors[(x + y) % 2], 0.025);
+        floor.receiveShadow = true;
         floor.position.set(this.worldX(x), -0.14, this.worldZ(y));
-        const floorLine = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.012, 0.78), floorLineMaterial);
-        floorLine.position.set(this.worldX(x), -0.11, this.worldZ(y));
-        const floorMarker = new THREE.Mesh(new THREE.CircleGeometry(0.045, 4), floorMarkerMaterial);
-        floorMarker.rotation.x = -Math.PI / 2;
-        floorMarker.rotation.z = Math.PI / 4;
-        floorMarker.position.set(this.worldX(x), -0.085, this.worldZ(y));
-        this.mapGroup.add(floor, floorLine, floorMarker);
+        this.mapGroup.add(floor);
 
         const kind = this.tiles[y][x];
         if (kind === 'floor') continue;
         const isWall = kind === 'wall';
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(isWall ? 0.82 : 0.72, isWall ? 0.9 : 0.52, isWall ? 0.82 : 0.72), isWall ? wallMaterial : crateMaterial);
-        mesh.position.set(this.worldX(x), isWall ? 0.33 : 0.2, this.worldZ(y));
+        const mesh = rounded(isWall ? 0.9 : 0.76, isWall ? 0.48 : 0.46, isWall ? 0.9 : 0.76, isWall ? wallMaterial : crateMaterial, 0.085);
+        mesh.position.set(this.worldX(x), isWall ? 0.15 : 0.14, this.worldZ(y));
         if (isWall) {
-          const cap = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.08, 0.86), wallCapMaterial);
-          cap.position.y = 0.49;
-          const edge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.72, 0.7), wallEdgeMaterial);
-          edge.position.set(-0.39, -0.02, 0);
-          const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.035, 4), wallMarkMaterial);
-          badge.position.y = 0.55;
-          badge.rotation.y = Math.PI / 4;
-          mesh.add(cap, edge, badge);
+          const rim = rounded(0.92, 0.12, 0.92, porcelain, 0.055);
+          rim.position.y = 0.2;
+          const cap = rounded(0.81, 0.15, 0.81, wallCapMaterial, 0.07);
+          cap.position.y = 0.285;
+          const inset = rounded(0.57, 0.014, 0.57, material(0xb9e6ef, 0.32), 0.006);
+          inset.position.y = 0.365;
+          mesh.add(rim, cap, inset);
         } else {
-          const cap = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.07, 0.76), crateCapMaterial);
-          cap.position.y = 0.3;
-          const slashA = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.035, 0.56), crateAccentMaterial);
-          const slashB = slashA.clone();
-          slashA.position.set(0, 0.345, 0);
-          slashB.position.set(0, 0.35, 0);
-          slashA.rotation.y = Math.PI / 4;
-          slashB.rotation.y = -Math.PI / 4;
-          const band = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.06, 0.055), crateAccentMaterial);
-          band.position.set(0, 0.03, 0.365);
-          mesh.add(cap, slashA, slashB, band);
+          const cap = rounded(0.81, 0.12, 0.81, crateCapMaterial, 0.045);
+          cap.position.y = 0.23;
+          const strap = rounded(0.14, 0.035, 0.78, strapMaterial, 0.012);
+          strap.position.y = 0.305;
+          const band = rounded(0.14, 0.42, 0.025, strapMaterial, 0.01);
+          band.position.set(0, 0.02, 0.387);
+          const clasp = rounded(0.22, 0.14, 0.045, claspMaterial, 0.018);
+          clasp.position.set(0, 0.08, 0.408);
+          mesh.add(cap, strap, band, clasp);
         }
         this.mapGroup.add(mesh);
+        mesh.traverse((child) => { if (child instanceof THREE.Mesh) { child.castShadow = true; child.receiveShadow = true; } });
         this.tileMeshes.set(key(position), mesh);
       }
     }
@@ -412,16 +473,31 @@ export class GameEngine {
   private createActor(id: string, name: string, color: number, spawn: GridPosition, personality: Actor['personality']): void {
     const group = new THREE.Group();
     const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.25, 0.45, 4, 10),
+      new THREE.CapsuleGeometry(0.29, 0.22, 6, 16),
       new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.08 }),
     );
     body.position.y = 0.43;
+    const protection = new THREE.Mesh(new THREE.SphereGeometry(0.61, 16, 12), new THREE.MeshBasicMaterial({ color: 0x70e7ff, transparent: true, opacity: 0.24, depthWrite: false, wireframe: true }));
+    protection.name = 'protection';
+    protection.position.y = 0.55;
+    protection.visible = false;
+    group.add(protection);
     body.castShadow = true;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 12, 8), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }));
-    head.position.y = 0.91;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 20, 16), new THREE.MeshStandardMaterial({ color, roughness: 0.32 }));
+    head.position.y = 0.83;
     head.castShadow = true;
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.08, 0.06), new THREE.MeshStandardMaterial({ color: 0x153d73, metalness: 0.35, roughness: 0.3 }));
-    visor.position.set(0, 0.94, 0.2);
+    const visor = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), new THREE.MeshStandardMaterial({ color: 0xf9fdff, roughness: 0.35 }));
+    visor.scale.set(1, 0.65, 0.45);
+    visor.position.set(0, 0.86, 0.29);
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshBasicMaterial({ color: 0x17375b }));
+      eye.scale.y = 1.5; eye.position.set(side * 0.095, 0.88, 0.395);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+      hand.position.set(side * 0.34, 0.39, 0.08);
+      const shoe = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshStandardMaterial({ color: 0x163c6c }));
+      shoe.scale.set(1, 0.65, 1.3); shoe.position.set(side * 0.17, 0.11, 0.1);
+      group.add(eye, hand, shoe);
+    }
     const ring = new THREE.Mesh(new THREE.RingGeometry(id === 'player' ? 0.34 : 0.3, id === 'player' ? 0.44 : 0.37, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: id === 'player' ? 0.78 : 0.42, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.03;
@@ -430,6 +506,8 @@ export class GameEngine {
     group.add(body, head, visor, ring, label);
     this.actorGroup.add(group);
     this.actors.set(id, {
+      score: 0, hits: 0, crates: 0, respawnDelay: 0,
+      skills: newSkills(),
       id,
       name,
       color,
@@ -485,9 +563,22 @@ export class GameEngine {
     if (player) player.moveCooldown = Math.max(0, player.moveCooldown - delta);
     const danger = this.getDangerKeys();
     for (const actor of this.actors.values()) {
+      const s = actor.skills;
+      for (const name of ['invincible', 'dash', 'rapid', 'bombCooldown'] as const) s[name] = Math.max(0, s[name] - delta);
+      if (s.respawning) {
+        actor.respawnDelay = Math.max(0, actor.respawnDelay - delta);
+        if (actor.respawnDelay > 0) continue;
+        const safe = this.findNearest(actor.spawn, (p) => this.isWalkable(p, actor) && !this.isOccupiedByOtherActor(p, actor.id) && this.isStableSafe(p, 0));
+        if (safe) { actor.position = safe; s.respawning = false; s.invincible = 2; actor.group.visible = true; actor.plannedPath = []; actor.state = 'patrol'; }
+        continue;
+      }
       if (actor.id === 'player' || !actor.alive) continue;
       actor.moveCooldown = Math.max(0, actor.moveCooldown - delta);
       actor.decisionCooldown -= delta;
+      if (actor.decisionCooldown <= 0 && s.active) {
+        const threatened = danger.has(key(actor.position));
+        if ((s.active === 'invincible' || s.active === 'dash') ? threatened : actor.personality !== 'careful' && this.canEscapeAfterBomb(actor)) this.useSkill(actor);
+      }
 
       if (danger.has(key(actor.position)) && actor.state !== 'escape') this.beginEscape(actor);
       if (actor.state === 'escape') {
@@ -595,9 +686,12 @@ export class GameEngine {
   }
 
   private explodeBomb(firstBomb: Bomb): void {
+    if (!this.bombs.some((bomb) => bomb.id === firstBomb.id)) return;
+    const existingItems = new Set(this.items);
     const queue = [firstBomb];
     const exploded = new Set<number>();
     const blastCells: GridPosition[] = [];
+    const cellOwners = new Map<string, string[]>();
     const explosionPatterns: ExplosionPattern[] = [];
     while (queue.length > 0) {
       const bomb = queue.shift();
@@ -613,6 +707,7 @@ export class GameEngine {
       const rays: ExplosionPattern['rays'] = [];
       for (const direction of Object.values(DIRECTIONS)) {
         let rayLength = 0;
+        let pierced = false;
         for (let distanceFromBomb = 1; distanceFromBomb <= bomb.range; distanceFromBomb += 1) {
           const cell = { x: bomb.position.x + direction.x * distanceFromBomb, y: bomb.position.y + direction.y * distanceFromBomb };
           if (!this.inBounds(cell)) break;
@@ -622,6 +717,8 @@ export class GameEngine {
           rayLength = distanceFromBomb;
           if (tile === 'crate') {
             this.destroyCrate(cell);
+            this.award(bomb.ownerId, 'crate');
+            if (bomb.piercing && !pierced) { pierced = true; continue; }
             break;
           }
         }
@@ -629,6 +726,9 @@ export class GameEngine {
       }
       explosionPatterns.push({ center: { ...bomb.position }, rays });
       for (const cell of cells) {
+        const owners = cellOwners.get(key(cell)) ?? [];
+        if (!owners.includes(bomb.ownerId)) owners.push(bomb.ownerId);
+        cellOwners.set(key(cell), owners);
         if (!blastCells.some((existing) => samePosition(existing, cell))) blastCells.push(cell);
         const chained = this.bombs.find((candidate) => samePosition(candidate.position, cell));
         if (chained) {
@@ -639,14 +739,29 @@ export class GameEngine {
     }
 
     this.createExplosionEffect(explosionPatterns);
+    this.emit({ type: 'explosion' });
     for (const actor of this.actors.values()) {
       if (actor.alive && blastCells.some((cell) => samePosition(cell, actor.position))) {
+        const s = actor.skills;
+        if (s.invincible > 0 || s.respawning) continue;
+        const attacker = cellOwners.get(key(actor.position))?.find(id => id !== actor.id);
+        if (attacker) this.award(attacker, 'hit');
+        if (s.shield) { s.shield = false; s.invincible = 0.8; this.emit({ type: 'notice', text: `${actor.name}的护盾被击破` }); continue; }
+        if (s.life) {
+          s.life = false;
+          s.respawning = true;
+          actor.respawnDelay = 0;
+          actor.group.visible = false;
+          if (actor.id === 'player') this.emit({ type: 'notice', text: '额外生命：等待安全复活' });
+          continue;
+        }
         actor.alive = false;
         actor.group.visible = false;
         this.emit({ type: 'actor-died', actorId: actor.id });
+        if (actor.id === 'player') this.emit({ type: 'notice', text: '你已淘汰，可观看剩余选手比赛' });
       }
     }
-    this.removeCollectedItems(blastCells);
+    this.removeCollectedItems(blastCells, existingItems);
     this.checkRoundEnd();
   }
 
@@ -659,35 +774,57 @@ export class GameEngine {
       this.tileMeshes.delete(key(position));
     }
     if (this.rng.next() < 0.42) {
-      const kinds: ItemKind[] = ['bomb', 'flame', 'speed'];
+      const kinds: ItemKind[] = ['bomb', 'bomb', 'flame', 'flame', 'speed', 'speed', 'shield', 'life', 'invincible', 'super', 'dash', 'rapid'];
       this.items.push({ kind: kinds[Math.floor(this.rng.next() * kinds.length)], position: { ...position } });
       this.createItemMesh(this.items[this.items.length - 1]);
     }
   }
 
-  private removeCollectedItems(blastCells: GridPosition[]): void {
+  private removeCollectedItems(blastCells: GridPosition[], existingItems: Set<Item>): void {
     for (let index = this.items.length - 1; index >= 0; index -= 1) {
+      if (!existingItems.has(this.items[index])) continue;
       if (!blastCells.some((cell) => samePosition(cell, this.items[index].position))) continue;
       const item = this.items.splice(index, 1)[0];
       const mesh = this.itemGroup.children.find((child) => child.userData.itemKey === key(item.position));
-      if (mesh) this.itemGroup.remove(mesh);
+      if (mesh) { this.itemGroup.remove(mesh); this.disposeObject(mesh); }
     }
   }
 
   private createItemMesh(item: Item): void {
-    const colors: Record<ItemKind, number> = { bomb: 0x2f80ed, flame: 0x78c8ff, speed: 0x1454aa };
-    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), new THREE.MeshStandardMaterial({ color: colors[item.kind], emissive: colors[item.kind], emissiveIntensity: 0.22, roughness: 0.36 }));
-    mesh.position.set(this.worldX(item.position.x), 0.28, this.worldZ(item.position.y));
-    mesh.castShadow = true;
+    const texture = new THREE.CanvasTexture(rewardCanvas(item.kind));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
+    mesh.scale.set(0.86, 0.86, 1);
+    mesh.position.set(this.worldX(item.position.x), 0.5, this.worldZ(item.position.y));
     mesh.userData.itemKey = key(item.position);
     this.itemGroup.add(mesh);
+  }
+
+  private spawnCoin(): void {
+    if (this.items.filter(item => item.kind === 'coin').length >= 6) return;
+    const danger = this.getDangerKeys();
+    const candidates: GridPosition[] = [];
+    for (let y = 1; y < BOARD_HEIGHT - 1; y++) {
+      for (let x = 1; x < BOARD_WIDTH - 1; x++) {
+        const position = { x, y };
+        if (this.tiles[y][x] !== 'floor' || danger.has(key(position))) continue;
+        if (this.items.some(item => samePosition(item.position, position))) continue;
+        if (this.bombs.some(bomb => samePosition(bomb.position, position))) continue;
+        if ([...this.actors.values()].some(actor => actor.alive && samePosition(actor.position, position))) continue;
+        candidates.push(position);
+      }
+    }
+    if (!candidates.length) return;
+    const item: Item = { kind: 'coin', position: candidates[Math.floor(this.rng.next() * candidates.length)] };
+    this.items.push(item);
+    this.createItemMesh(item);
   }
 
   private createBombWarning(bomb: Bomb): void {
     const group = new THREE.Group();
     group.userData.bombId = bomb.id;
     const material = new THREE.MeshBasicMaterial({ color: 0xe15c70, transparent: true, opacity: 0.24, side: THREE.DoubleSide, depthWrite: false });
-    for (const cell of this.getBlastCells(bomb.position, bomb.range)) {
+    for (const cell of this.getBlastCells(bomb.position, bomb.range, bomb.piercing)) {
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.72), material);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(this.worldX(cell.x), -0.075, this.worldZ(cell.y));
@@ -702,16 +839,17 @@ export class GameEngine {
     this.warningGroup.add(group);
   }
 
-  private getBlastCells(position: GridPosition, range: number): GridPosition[] {
+  private getBlastCells(position: GridPosition, range: number, piercing = false): GridPosition[] {
     const cells = [{ ...position }];
     for (const direction of Object.values(DIRECTIONS)) {
+      let pierced = false;
       for (let distanceFromBomb = 1; distanceFromBomb <= range; distanceFromBomb += 1) {
         const cell = { x: position.x + direction.x * distanceFromBomb, y: position.y + direction.y * distanceFromBomb };
         if (!this.inBounds(cell)) break;
         const tile = this.tiles[cell.y][cell.x];
         if (tile === 'wall') break;
         cells.push(cell);
-        if (tile === 'crate') break;
+        if (tile === 'crate') { if (piercing && !pierced) pierced = true; else break; }
       }
     }
     return cells;
@@ -732,12 +870,12 @@ export class GameEngine {
 
   private createExplosionEffect(patterns: ExplosionPattern[]): void {
     const group = new THREE.Group();
-    const groundMaterial = new THREE.MeshBasicMaterial({ color: 0xe15c70, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
-    const outerFlameMaterial = new THREE.MeshBasicMaterial({ color: 0xff5a3d, transparent: true, opacity: 0.95, depthWrite: false });
-    const innerFlameMaterial = new THREE.MeshBasicMaterial({ color: 0xffc247, transparent: true, opacity: 0.98, depthWrite: false });
-    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0xffffd0, transparent: true, opacity: 1, depthWrite: false });
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xff3d34, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
-    const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffe57a, transparent: true, opacity: 0.96, depthWrite: false });
+    const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x229fff, transparent: true, opacity: 0.48, side: THREE.DoubleSide, depthWrite: false });
+    const outerFlameMaterial = new THREE.MeshBasicMaterial({ color: 0x16a9f4, transparent: true, opacity: 0.8, depthWrite: false });
+    const innerFlameMaterial = new THREE.MeshBasicMaterial({ color: 0xa1efff, transparent: true, opacity: 0.92, depthWrite: false });
+    const coreMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false });
+    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xf5ffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
+    const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0x83ddff, transparent: true, opacity: 0.96, depthWrite: false });
     const paintedCells = new Set<string>();
 
     const paintGroundCell = (cell: GridPosition): void => {
@@ -770,9 +908,10 @@ export class GameEngine {
       group.add(centerOuter, centerInner, core, ring);
 
       for (const offset of [{ x: -0.28, z: -0.18 }, { x: 0.25, z: -0.12 }, { x: -0.2, z: 0.24 }, { x: 0.3, z: 0.2 }]) {
-        const spark = new THREE.Mesh(new THREE.TetrahedronGeometry(0.055, 0), sparkMaterial);
+        const spark = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), sparkMaterial);
         spark.position.set(centerX + offset.x, 0.3, centerZ + offset.z);
         spark.userData.effectPart = 'spark';
+        spark.userData.velocity = new THREE.Vector3(offset.x * 7, 2, offset.z * 7);
         group.add(spark);
       }
 
@@ -783,8 +922,8 @@ export class GameEngine {
         const rayLength = ray.length + 0.45;
         const rayCenterX = centerX + ray.direction.x * rayLength * 0.5;
         const rayCenterZ = centerZ + ray.direction.y * rayLength * 0.5;
-        const outerRay = new THREE.Mesh(new THREE.ConeGeometry(0.32, rayLength, 8), outerFlameMaterial);
-        const innerRay = new THREE.Mesh(new THREE.ConeGeometry(0.2, rayLength + 0.08, 8), innerFlameMaterial);
+        const outerRay = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, Math.max(0.1, rayLength - 0.56), 4, 12), outerFlameMaterial);
+        const innerRay = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, Math.max(0.1, rayLength - 0.4), 4, 12), innerFlameMaterial);
         outerRay.position.set(rayCenterX, 0.2, rayCenterZ);
         innerRay.position.set(rayCenterX, 0.34, rayCenterZ);
         if (ray.direction.x !== 0) {
@@ -823,7 +962,12 @@ export class GameEngine {
         if (child.userData.effectPart === 'ring') child.scale.setScalar(1 + progress * 3);
         if (child.userData.effectPart === 'rayOuter' || child.userData.effectPart === 'rayInner') child.scale.y = 1 + Math.sin(this.elapsed * 34) * 0.12;
         if (child.userData.effectPart === 'centerOuter' || child.userData.effectPart === 'centerInner' || child.userData.effectPart === 'core') child.scale.setScalar(1 + Math.sin(this.elapsed * 40) * 0.2);
-        if (child.userData.effectPart === 'spark') child.rotation.y += delta * 8;
+        if (child.userData.effectPart === 'spark') {
+          const velocity = child.userData.velocity as THREE.Vector3;
+          child.position.addScaledVector(velocity, delta);
+          velocity.y -= delta * 8;
+          child.scale.setScalar(Math.max(0.1, fade));
+        }
       });
       if (effect.ttl <= 0) {
         this.effectGroup.remove(effect.mesh);
@@ -831,7 +975,7 @@ export class GameEngine {
         this.explosions.splice(index, 1);
       }
     }
-    for (const mesh of this.itemGroup.children) mesh.rotation.y += delta * 1.8;
+    for (const mesh of this.itemGroup.children) mesh.position.y = 0.5 + Math.sin(this.elapsed * 2.5 + mesh.position.x) * 0.045;
     for (const warning of this.warningGroup.children) {
       const pulse = 0.16 + (Math.sin(this.elapsed * 8) + 1) * 0.08;
       const material = (warning.children[0] as THREE.Mesh | undefined)?.material as THREE.MeshBasicMaterial | undefined;
@@ -844,6 +988,8 @@ export class GameEngine {
       actor.group.position.set(this.worldX(actor.position.x), 0, this.worldZ(actor.position.y));
       actor.ring.rotation.z += 0.018;
       actor.body.position.y = 0.43 + Math.sin(this.elapsed * 5 + actor.position.x) * 0.015;
+      const protection = actor.group.getObjectByName('protection');
+      if (protection) protection.visible = actor.skills.shield || (actor.skills.invincible > 0 && (actor.skills.invincible > 0.8 || Math.sin(this.elapsed * 28) > 0));
     }
     for (const bomb of this.bombs) {
       const mesh = this.bombGroup.children.find((child) => child.userData.bombId === bomb.id);
@@ -857,51 +1003,64 @@ export class GameEngine {
   }
 
   private placeBomb(actor: Actor): boolean {
+    if (actor.skills.respawning || actor.skills.bombCooldown > 0) return false;
     if (actor.bombsActive >= actor.bombCapacity || this.bombs.some((bomb) => samePosition(bomb.position, actor.position))) return false;
-    const bomb: Bomb = { id: ++this.bombId, ownerId: actor.id, position: { ...actor.position }, timer: 2, range: actor.range };
+    const bomb: Bomb = { id: ++this.bombId, ownerId: actor.id, position: { ...actor.position }, timer: 2, range: actor.range + (actor.skills.armed ? 2 : 0), piercing: actor.skills.armed };
+    actor.skills.bombCooldown = actor.skills.rapid > 0 ? 0.12 : 0.35;
+    if (actor.skills.armed) { actor.skills.active = null; actor.skills.armed = false; }
     this.bombs.push(bomb);
     actor.bombsActive += 1;
     const mesh = new THREE.Group();
     mesh.userData.bombId = bomb.id;
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 12), new THREE.MeshStandardMaterial({ color: 0x153d73, roughness: 0.38, metalness: 0.25 }));
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 16), new THREE.MeshStandardMaterial({ color: 0x209ff0, roughness: 0.16, metalness: 0.25 }));
     body.position.y = 0.28;
+    if (bomb.piercing) { (body.material as THREE.MeshStandardMaterial).color.setHex(0xffbb45); body.scale.setScalar(1.2); }
     const countdownRing = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 8, 24), new THREE.MeshBasicMaterial({ color: 0xe15c70, transparent: true, opacity: 0.95 }));
     countdownRing.rotation.x = -Math.PI / 2;
     countdownRing.position.y = 0.05;
     body.castShadow = true;
     mesh.add(body, countdownRing);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), new THREE.MeshBasicMaterial({ color: 0xe7ffff }));
+    glint.position.set(-0.1, 0.46, 0.17); mesh.add(glint);
     this.bombGroup.add(mesh);
     this.createBombWarning(bomb);
+    this.emit({ type: 'bomb-placed' });
     return true;
   }
 
   private tryMove(actor: Actor, direction: Direction): boolean {
-    if (!actor.alive || actor.moveCooldown > 0) return false;
+    if (!actor.alive || actor.skills.respawning || actor.moveCooldown > 0) return false;
     const delta = DIRECTIONS[direction];
     const next = { x: actor.position.x + delta.x, y: actor.position.y + delta.y };
     if (!this.inBounds(next) || !this.isWalkable(next, actor)) return false;
     const occupant = [...this.actors.values()].find((candidate) => candidate.alive && candidate.id !== actor.id && samePosition(candidate.position, next));
     if (occupant) return false;
     actor.position = next;
-    actor.moveCooldown = 0.14 / actor.speed;
+    actor.moveCooldown = 0.14 / Math.min(1.7, actor.speed * (actor.skills.dash > 0 ? 1.4 : 1));
     this.collectItem(actor);
     return true;
   }
 
-  private collectItem(actor: Actor): void {
+  private collectItem(actor: Actor, replace = false): void {
+    if (!actor.alive || actor.skills.respawning) return;
     const index = this.items.findIndex((item) => samePosition(item.position, actor.position));
     if (index < 0) return;
+    if (isActive(this.items[index].kind) && actor.skills.active && !replace) return;
     const item = this.items.splice(index, 1)[0];
     const mesh = this.itemGroup.children.find((child) => child.userData.itemKey === key(item.position));
-    if (mesh) this.itemGroup.remove(mesh);
-    if (item.kind === 'bomb') actor.bombCapacity = Math.min(4, actor.bombCapacity + 1);
-    if (item.kind === 'flame') actor.range = Math.min(6, actor.range + 1);
-    if (item.kind === 'speed') actor.speed = Math.min(1.35, actor.speed + 0.1);
+    if (mesh) { this.itemGroup.remove(mesh); this.disposeObject(mesh); }
+    if (item.kind === 'coin') actor.score += MATCH_RULES.coinPoints;
+    if (item.kind === 'bomb') actor.bombCapacity = Math.min(5, actor.bombCapacity + 1);
+    if (item.kind === 'flame') actor.range = Math.min(5, actor.range + 1);
+    if (item.kind === 'speed') actor.speed = Math.min(1.3, actor.speed + 0.1);
+    if (item.kind === 'shield') actor.skills.shield = true;
+    if (item.kind === 'life') actor.skills.life = true;
+    if (isActive(item.kind)) actor.skills.active = item.kind;
     this.emit({ type: 'item-picked', actorId: actor.id, item: item.kind });
   }
 
   private canEscapeAfterBomb(actor: Actor): boolean {
-    const predictedBomb: BombPrediction = { position: { ...actor.position }, timer: 2, range: actor.range };
+    const predictedBomb: BombPrediction = { position: { ...actor.position }, timer: 2, range: actor.range + (actor.skills.armed ? 2 : 0), piercing: actor.skills.armed };
     return this.findTimedEscapePath(actor, predictedBomb) !== null;
   }
 
@@ -945,7 +1104,7 @@ export class GameEngine {
     const safetyMargin = 0.2;
     const explosionDuration = 0.38;
     return bombs.some((bomb) => {
-      if (!this.getBlastCells(bomb.position, bomb.range).some((cell) => samePosition(cell, position))) return false;
+      if (!this.getBlastCells(bomb.position, bomb.range, bomb.piercing).some((cell) => samePosition(cell, position))) return false;
       const explodeAt = Math.max(0, bomb.timer);
       return timeFromNow >= explodeAt - safetyMargin && timeFromNow <= explodeAt + explosionDuration;
     });
@@ -955,7 +1114,7 @@ export class GameEngine {
     const bombs: BombPrediction[] = extraBomb ? [...this.bombs, extraBomb] : this.bombs;
     const explosionDuration = 0.38;
     return bombs.every((bomb) => {
-      const inBlast = this.getBlastCells(bomb.position, bomb.range).some((cell) => samePosition(cell, position));
+      const inBlast = this.getBlastCells(bomb.position, bomb.range, bomb.piercing).some((cell) => samePosition(cell, position));
       return !inBlast || timeFromNow > Math.max(0, bomb.timer) + explosionDuration;
     });
   }
@@ -985,7 +1144,7 @@ export class GameEngine {
         }
       }
     };
-    for (const bomb of this.bombs) addBombDanger(bomb.position, bomb.range);
+    for (const bomb of this.bombs) for (const cell of this.getBlastCells(bomb.position, bomb.range, bomb.piercing)) danger.add(key(cell));
     if (extraPosition && extraRange) addBombDanger(extraPosition, extraRange);
     return danger;
   }
@@ -1038,11 +1197,13 @@ export class GameEngine {
 
   private checkRoundEnd(): void {
     if (this.result) return;
-    const playerAlive = this.actors.get('player')?.alive ?? false;
-    const enemiesAlive = [...this.actors.values()].some((actor) => actor.id !== 'player' && actor.alive);
-    if (!playerAlive && !enemiesAlive) this.finishRound('draw');
-    else if (!playerAlive) this.finishRound('lose');
-    else if (!enemiesAlive) this.finishRound('win');
+    const survivors = [...this.actors.values()].filter(a => a.alive);
+    if (survivors.length === 0) { this.finishRound('draw'); return; }
+    if (survivors.length === 1) { this.finishRound(survivors[0].id === 'player' ? 'win' : 'lose'); return; }
+    if (this.remaining > 0) return;
+    const standings = this.getStandings().filter(a => this.actors.get(a.id)?.alive);
+    const winners = standings.filter(a => a.score === standings[0]?.score);
+    this.finishRound(winners.some(a => a.id === 'player') ? winners.length > 1 ? 'draw' : 'win' : 'lose');
   }
 
   private finishRound(result: 'win' | 'lose' | 'draw'): void {
