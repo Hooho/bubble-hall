@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "node skills.test.mjs && node competition.test.mjs && node storage.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

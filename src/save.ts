@@ -1,7 +1,7 @@
 import { newCareer, type Career } from './career';
 import type { Tournament } from './tournament';
 import type { GameSnapshot } from './game';
-import { roster } from './roster';
+import { roster, playerName } from './roster';
 import { maps } from './maps';
 import { rewardNames } from './skills';
 export type Settings = { quality: 'low' | 'high'; reducedMotion: boolean; controls: 'auto' | 'touch'; palette: 'blue' | 'mint' | 'gold'; unlocked: string[] };
@@ -26,6 +26,10 @@ function snapshot(v: unknown): boolean {
   if (!list(v.opponents,3,p=>object(p)&&roster.some(r=>r.id===p.id)&&text(p.name,40)&&['brave','careful','collector'].includes(p.personality)&&num(p.color,0xffffff)&&num(p.intelligence,5))) return false;
   if (!list(v.actors,4,a=>object(a)&&ids.has(a.id)&&text(a.name,40)&&position(a.position)&&position(a.spawn)&&typeof a.alive==='boolean'&&['brave','careful','collector'].includes(a.personality)&&['escape','attack','break','collect','patrol','stuck'].includes(a.state)&&['score','hits','crates','respawnDelay','intelligence','color','bombCapacity','bombsActive','range','speed','moveCooldown','decisionCooldown','blockedMoves'].every(k=>typeof a[k]==='number'&&Number.isFinite(a[k]))&&a.bombCapacity>=1&&a.bombCapacity<=5&&a.range>=2&&a.range<=5&&a.speed>=1&&a.speed<=1.7&&list(a.plannedPath,143,position)&&object(a.skills)&&[null,'invincible','super','dash','rapid'].includes(a.skills.active)&&['armed','shield','life','respawning'].every(k=>typeof a.skills[k]==='boolean')&&['invincible','dash','rapid','bombCooldown'].every(k=>num(a.skills[k],10)))) return false;
   if (!v.actors.some((a:any)=>a.id==='player') || new Set(v.actors.map((a:any)=>a.id)).size!==v.actors.length) return false;
+  // Imported names are rendered in the HUD: only canonical identity names are
+  // accepted, never arbitrary markup carried by an external save file.
+  if (!v.actors.every((a:any)=>a.name===playerName(a.id)) || !v.opponents.every((p:any)=>p.name===playerName(p.id))) return false;
+  if (new Set(v.opponents.map((p:any)=>p.id)).size!==v.opponents.length || v.actors.length!==v.opponents.length+1 || !v.opponents.every((p:any)=>v.actors.some((a:any)=>a.id===p.id))) return false;
   return list(v.items,143,i=>object(i)&&Object.hasOwn(rewardNames,i.kind)&&position(i.position)) && list(v.bombs,20,b=>object(b)&&v.actors.some((a:any)=>a.id===b.ownerId)&&position(b.position)&&num(b.timer,2)&&num(b.id)&&Number.isInteger(b.range)&&b.range>=2&&b.range<=7&&(b.piercing===undefined||typeof b.piercing==='boolean'));
 }
 export function validateSave(v: unknown): v is Save {
