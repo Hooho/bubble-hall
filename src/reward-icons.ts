@@ -18,6 +18,39 @@ type IconLayer = { path: string; fill: string; stroke?: string; width?: number; 
 // One layered drawing feeds both the interface SVG and the in-world texture.
 // Strong outer silhouettes remain legible at a single map-cell size.
 const illustratedRewards: Partial<Record<Reward, IconLayer[]>> = {
+  flame: [
+    { path: 'M32 3 L41 13 L36 13 L36 22 L28 22 L28 13 L23 13 Z M61 32 L51 41 L51 36 L42 36 L42 28 L51 28 L51 23 Z M32 61 L23 51 L28 51 L28 42 L36 42 L36 51 L41 51 Z M3 32 L13 23 L13 28 L22 28 L22 36 L13 36 L13 41 Z', fill: '#f38a35', stroke: '#fff', width: 2 },
+    { path: 'M32 19 A13 13 0 1 0 32 45 A13 13 0 1 0 32 19 Z', fill: '#d65a23', stroke: '#fff3c5', width: 2 },
+    { path: 'M32 23 L35 29 L42 32 L35 35 L32 42 L29 35 L22 32 L29 29 Z', fill: '#fff0a0' },
+    { path: 'M18 9 L9 9 L9 18 M46 9 L55 9 L55 18 M9 46 L9 55 L18 55 M46 55 L55 55 L55 46', fill: 'none', stroke: '#ffce87', width: 2 },
+  ],
+  bomb: [
+    { path: 'M27 20 Q27 9 38 11', fill: 'none', stroke: '#586786', width: 4 },
+    { path: 'M21 19 L32 19 L34 26 L19 26 Z', fill: '#263d6b', stroke: '#fff', width: 2 },
+    { path: 'M27 24 A18 18 0 1 0 27 60 A18 18 0 1 0 27 24 Z', fill: '#367cca', stroke: '#fff', width: 2 },
+    { path: 'M39 32 Q46 49 30 55 Q17 58 12 45 Q20 56 32 47 Q39 41 39 32 Z', fill: '#24518d' },
+    { path: 'M17 37 Q18 31 25 31', fill: 'none', stroke: '#bceaff', width: 4 },
+    { path: 'M43 5 L51 5 L51 14 L60 14 L60 22 L51 22 L51 31 L43 31 L43 22 L34 22 L34 14 L43 14 Z', fill: '#38b899', stroke: '#fff', width: 2.5 },
+  ],
+  super: [
+    { path: 'M10 20 L5 12 M7 32 L2 31 M49 40 L60 43 M46 52 L53 59', fill: 'none', stroke: '#f1b73e', width: 3 },
+    { path: 'M34 21 Q35 9 46 12 L50 8', fill: 'none', stroke: '#98592c', width: 4 },
+    { path: 'M50 2 L53 8 L60 9 L55 14 L56 20 L50 17 L44 20 L45 14 L40 9 L47 8 Z', fill: '#ffd95c', stroke: '#fff', width: 2 },
+    { path: 'M26 19 L38 21 L38 28 L24 26 Z', fill: '#b47829', stroke: '#fff', width: 2 },
+    { path: 'M30 23 A19 19 0 1 0 30 61 A19 19 0 1 0 30 23 Z', fill: '#f4b638', stroke: '#fff', width: 2 },
+    { path: 'M45 31 Q53 50 35 58 Q20 63 13 48 Q24 58 36 48 Q45 41 45 31 Z', fill: '#d48b22' },
+    { path: 'M18 35 Q21 29 28 29', fill: 'none', stroke: '#fff2b8', width: 4 },
+    { path: 'M32 31 L22 44 L29 44 L26 54 L40 39 L33 39 L37 31 Z', fill: '#fff8d9', stroke: '#b8791e', width: 1.5 },
+  ],
+  speed: [
+    { path: 'M7 19 L18 17 L24 23 L30 16 L39 29 Q45 34 54 35 Q60 36 60 43 L59 51 L6 51 L5 37 Z', fill: '#54b6e7', stroke: '#fff', width: 2.5 },
+    { path: 'M9 21 L17 20 L23 27 L29 24 L32 29 Q22 36 14 27 L8 29 Z', fill: '#244e7e' },
+    { path: 'M7 33 L14 31 L16 42 L7 43 Z M39 33 Q46 38 55 38 L58 43 L41 43 Z', fill: '#d8f4ff' },
+    { path: 'M21 34 L26 40 L37 34', fill: 'none', stroke: '#fff', width: 3 },
+    { path: 'M29 22 L35 22 M32 27 L38 27 M35 32 L41 32', fill: 'none', stroke: '#fff', width: 2.5 },
+    { path: 'M6 44 Q30 47 60 43 L60 51 Q44 55 7 52 Z', fill: '#fff9df', stroke: '#377aa9', width: 2 },
+    { path: 'M8 54 L57 54 M13 49 L13 52 M22 50 L22 53 M45 49 L45 53 M53 48 L53 52', fill: 'none', stroke: '#244e7e', width: 2 },
+  ],
   coin: [
     { path: 'M34 7 C49 7 59 18 59 33 C59 48 49 59 34 59 L28 59 L28 7 Z', fill: '#ba6b13', stroke: '#fff', width: 2 },
     { path: 'M50 17 L56 17 M53 25 L59 25 M53 34 L59 34 M51 43 L56 43 M46 51 L51 51', fill: 'none', stroke: '#f4b53b', width: 2 },
