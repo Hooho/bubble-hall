@@ -574,6 +574,18 @@ export class GameEngine {
     ring.rotation.x = -Math.PI / 2;
     ring.name = 'ring';
     ring.position.y = 0.03;
+    if (id === 'player') {
+      const aura = new THREE.Group();
+      aura.name = 'player-aura';
+      aura.userData.time = 0;
+      for (let i = 0; i < 3; i++) {
+        const wave = new THREE.Mesh(new THREE.RingGeometry(0.37, 0.405, 48), new THREE.MeshBasicMaterial({ color: 0x39bfff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+        wave.rotation.x = -Math.PI / 2;
+        wave.position.y = 0.035 + i * 0.001;
+        aura.add(wave);
+      }
+      group.add(aura);
+    }
     const label = this.createActorLabel(id === 'player' ? 'YOU' : name, color, id === 'player');
     label.name = 'name-label';
     label.position.set(0, 1.38, 0);
@@ -1023,6 +1035,18 @@ export class GameEngine {
   }
 
   private updateEffects(delta: number): void {
+    const aura = this.actors.get('player')?.group.getObjectByName('player-aura');
+    if (aura) {
+      aura.userData.time += delta;
+      const quiet = this.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      aura.children.forEach((child, index) => {
+        const wave = child as THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+        const phase = (aura.userData.time / 1.8 + index / 3) % 1;
+        wave.visible = !quiet;
+        wave.scale.setScalar(0.65 + phase * 1.05);
+        wave.material.opacity = Math.sin(Math.PI * phase) * (1 - phase) * 0.8;
+      });
+    }
     this.shakeTime = Math.max(0, this.shakeTime - delta);
     for (let index = this.explosions.length - 1; index >= 0; index -= 1) {
       const effect = this.explosions[index];
