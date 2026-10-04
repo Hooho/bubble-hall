@@ -10,15 +10,16 @@ export function attachNuwa(group: THREE.Group): void {
   const material = new THREE.SpriteMaterial({ transparent: true, alphaTest: 0.08, depthWrite: true, toneMapped: false });
   const sprite = new THREE.Sprite(material);
   sprite.name = 'character-art';
-  sprite.center.set(0.5, 0.05);
+  sprite.center.set(0.56, 0.42);
   sprite.position.y = 0.035;
-  sprite.scale.set(1.12, 1.12, 1);
+  sprite.scale.set(0.78, 0.78, 1);
   sprite.visible = false;
   group.add(sprite);
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.23, 24), new THREE.MeshBasicMaterial({ color: 0x385366, transparent: true, opacity: 0.16, depthWrite: false }));
   shadow.name = 'character-shadow';
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.025;
+  shadow.position.z = 0.32;
   group.add(shadow);
   const texture = new THREE.TextureLoader().load('/characters/nuwa/directions.png', () => {
     // Keep the old model until the asset has loaded successfully.
@@ -36,5 +37,8 @@ export function attachNuwa(group: THREE.Group): void {
 export function faceCharacter(group: THREE.Group, direction: Direction): void {
   const sprite = group.getObjectByName('character-art') as THREE.Sprite | undefined;
   sprite?.material.map?.offset.set(...NUWA_FRAMES[direction]);
-  if (sprite) sprite.center.y = direction === 'left' || direction === 'right' ? 0.068 : 0.049;
+  if (sprite) {
+    sprite.center.x = { down: 0.56, up: 0.5, left: 0.52, right: 0.48 }[direction];
+    sprite.center.y = direction === 'left' || direction === 'right' ? 0.439 : 0.42;
+  }
 }

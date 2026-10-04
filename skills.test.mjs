@@ -10,7 +10,8 @@ const sprite = { material: { map: { offset: { set: (...values) => { uv = values;
 for (const direction of ['up','down','left','right']) {
   faceCharacter({ getObjectByName: () => sprite }, direction);
   assert.deepEqual(uv, NUWA_FRAMES[direction]);
-  assert.ok(sprite.center.y > 0 && sprite.center.y < 0.1);
+  assert.ok(sprite.center.y >= 0.42 && sprite.center.y < 0.45, 'art stays centered within its tile');
+  assert.ok(sprite.center.x >= 0.48 && sprite.center.x <= 0.56);
 }
 assert.doesNotThrow(() => faceCharacter({ getObjectByName: () => undefined }, 'down'));
 console.log('PASS: Nuwa four-direction atlas mapping, foot anchors and legacy actor fallback');
