@@ -14,9 +14,53 @@ export const rewardArt: Record<Reward, { color: string; path: string }> = {
   rapid: { color: '#e56746', path: 'M6 17 L20 32 L6 47 L14 54 L35 32 L14 10 Z M30 17 L44 32 L30 47 L38 54 L59 32 L38 10 Z' },
 };
 
+type IconLayer = { path: string; fill: string; stroke?: string; width?: number; opacity?: number };
+// One layered drawing feeds both the interface SVG and the in-world texture.
+// Strong outer silhouettes remain legible at a single map-cell size.
+const illustratedRewards: Partial<Record<Reward, IconLayer[]>> = {
+  coin: [
+    { path: 'M34 7 C49 7 59 18 59 33 C59 48 49 59 34 59 L28 59 L28 7 Z', fill: '#ba6b13', stroke: '#fff', width: 2 },
+    { path: 'M50 17 L56 17 M53 25 L59 25 M53 34 L59 34 M51 43 L56 43 M46 51 L51 51', fill: 'none', stroke: '#f4b53b', width: 2 },
+    { path: 'M29 5 A24 26 0 1 0 29 57 A24 26 0 1 0 29 5 Z', fill: '#ffcf46', stroke: '#fff8d3', width: 2 },
+    { path: 'M29 11 A18 20 0 1 0 29 51 A18 20 0 1 0 29 11 Z', fill: '#f5ac22', stroke: '#cc8115', width: 2 },
+    { path: 'M14 30 Q14 16 28 15 M17 46 Q24 51 34 47', fill: 'none', stroke: '#fff0a3', width: 3 },
+    { path: 'M29 19 L33 27 L42 28 L35 35 L37 44 L29 39 L21 44 L23 35 L16 28 L25 27 Z', fill: '#ffe88a', stroke: '#ce8c23', width: 1.5 },
+    { path: 'M48 3 L50 8 L55 10 L50 12 L48 17 L46 12 L41 10 L46 8 Z', fill: '#fff7ca' },
+  ],
+  dash: [
+    { path: 'M5 23 L19 23 M3 33 L15 33 M7 43 L16 43', fill: 'none', stroke: '#edb23b', width: 4 },
+    { path: 'M45 4 A6 6 0 1 0 45 16 A6 6 0 1 0 45 4 Z', fill: '#f3b22b', stroke: '#fff', width: 2 },
+    { path: 'M35 18 L42 22 L36 33 L44 40 L42 52 L51 54 L50 60 L35 58 L35 45 L28 39 L22 49 L9 55 L6 49 L18 42 L24 29 L28 23 L23 23 L18 29 L13 25 L21 16 L30 16 Z', fill: '#e9a325', stroke: '#fff', width: 2 },
+    { path: 'M39 21 L48 29 L56 25', fill: 'none', stroke: '#fff', width: 9 },
+    { path: 'M39 21 L48 29 L56 25', fill: 'none', stroke: '#ce831b', width: 5 },
+    { path: 'M29 26 L33 21', fill: 'none', stroke: '#ffe69a', width: 3 },
+  ],
+  rapid: [
+    { path: 'M3 18 L11 18 M2 26 L8 26 M8 41 L16 41 M10 49 L20 49', fill: 'none', stroke: '#e26948', width: 3 },
+    { path: 'M16 9 L19 5 L23 6 M30 18 L33 13 L37 14 M47 29 L50 22 L55 24', fill: 'none', stroke: '#925139', width: 3 },
+    { path: 'M17 11 A9 9 0 1 0 17 29 A9 9 0 1 0 17 11 Z', fill: '#ffc6ad', stroke: '#fff', width: 2 },
+    { path: 'M30 21 A12 12 0 1 0 30 45 A12 12 0 1 0 30 21 Z', fill: '#f39b70', stroke: '#fff', width: 2 },
+    { path: 'M46 31 A14 14 0 1 0 46 59 A14 14 0 1 0 46 31 Z', fill: '#e56746', stroke: '#fff', width: 2 },
+    { path: 'M13 17 L15 15 M24 29 L27 26 M38 42 L42 38', fill: 'none', stroke: '#fff5e4', width: 3 },
+    { path: 'M56 17 L57 21 L61 22 L57 24 L56 28 L54 24 L50 22 L54 21 Z', fill: '#ffd65c', stroke: '#fff', width: 1 },
+  ],
+  invincible: [
+    { path: 'M32 4 A28 28 0 1 0 32 60 A28 28 0 1 0 32 4 Z', fill: '#d5f7ff', stroke: '#fff', width: 3 },
+    { path: 'M32 6 A26 26 0 1 0 32 58 A26 26 0 1 0 32 6 Z', fill: '#c0edff', stroke: '#42b8e4', width: 2 },
+    { path: 'M20 47 L21 39 Q22 33 32 33 Q42 33 43 39 L44 47 Q32 53 20 47 Z', fill: '#397bc4' },
+    { path: 'M32 18 A9 9 0 1 0 32 36 A9 9 0 1 0 32 18 Z', fill: '#397bc4', stroke: '#fff', width: 2 },
+    { path: 'M26 26 Q32 23 38 26 L38 30 Q32 34 26 30 Z', fill: '#fff' },
+    { path: 'M12 29 Q13 13 29 11 M42 53 Q54 48 54 35', fill: 'none', stroke: '#fff', width: 3.5 },
+    { path: 'M52 4 L54 11 L61 13 L54 15 L52 22 L50 15 L43 13 L50 11 Z', fill: '#fff', stroke: '#5fcde7', width: 1.5 },
+  ],
+};
+
+export function rewardLayers(kind: Reward): IconLayer[] {
+  return illustratedRewards[kind] ?? [{ path: rewardArt[kind].path, fill: rewardArt[kind].color, stroke: '#fff', width: 2 }];
+}
+
 export function rewardIcon(kind: Reward): string {
-  const art = rewardArt[kind];
-  return `<svg class="reward-icon" viewBox="0 0 64 64" aria-hidden="true"><path d="${art.path}" fill="${art.color}" fill-rule="evenodd" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  return `<svg class="reward-icon" viewBox="0 0 64 64" aria-hidden="true">${rewardLayers(kind).map(layer => `<path d="${layer.path}" fill="${layer.fill}" fill-rule="evenodd" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.width ?? 0}" stroke-linejoin="round" stroke-linecap="round" opacity="${layer.opacity ?? 1}"/>`).join('')}</svg>`;
 }
 
 export function rewardCanvas(kind: Reward): HTMLCanvasElement {
@@ -26,12 +70,12 @@ export function rewardCanvas(kind: Reward): HTMLCanvasElement {
   if (!ctx) throw new Error('Reward icon canvas unavailable');
   ctx.scale(1.7, 1.7);
   ctx.translate(5.6, 4);
-  const art = rewardArt[kind];
-  const path = new Path2D(art.path);
-  ctx.shadowColor = '#173d7360'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 4;
-  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.stroke(path);
-  const gradient = ctx.createLinearGradient(0, 4, 0, 60);
-  gradient.addColorStop(0, '#ffffff'); gradient.addColorStop(0.23, art.color); gradient.addColorStop(1, art.color);
-  ctx.fillStyle = gradient; ctx.fill(path, 'evenodd');
+  ctx.lineJoin = 'round';ctx.lineCap = 'round';
+  for (const layer of rewardLayers(kind)) {
+    const path = new Path2D(layer.path);
+    ctx.globalAlpha = layer.opacity ?? 1;
+    if (layer.fill !== 'none') { ctx.fillStyle = layer.fill; ctx.fill(path, 'evenodd'); }
+    if (layer.stroke) { ctx.strokeStyle = layer.stroke; ctx.lineWidth = layer.width ?? 2; ctx.stroke(path); }
+  }
   return canvas;
 }
