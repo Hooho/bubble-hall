@@ -10,3 +10,4 @@ export const roster = identities.map((identity, index) => ({
 export type Contestant = typeof roster[number];
 export const playerName = (id: string) => id === 'player' ? '你' : roster.find(p => p.id === id)?.name ?? '未知选手';
 export const personalityName = { brave: '追击型', careful: '生存型', collector: '收集型' };
+export const playerAvatar = (id: string): string => `/avatars/${id.padStart(3,'0')}.webp`;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 async function load(path){const b=await build({entryPoints:[path],bundle:true,platform:'node',format:'esm',write:false});return import(`data:text/javascript;base64,${Buffer.from(b.outputFiles[0].text).toString('base64')}`);}
 const {createSaveStore}=await load('src/shared/save-store.ts');
-const {initialSave,validateSave}=await load('src/save.ts');
+const {initialSave,validateSave,savedMatchSlots}=await load('src/save.ts');
 const {createTournament,submitMatch,advance}=await load('src/tournament.ts');
 const {settleQuick,settleTournament}=await load('src/career.ts');
 const memory=new Map(); const storage={getItem:k=>memory.get(k)??null,setItem:(k,v)=>memory.set(k,v)};
@@ -35,3 +35,17 @@ wardrobe.career.coins=120;assert.equal(equipCosmetic(wardrobe.career,wardrobe.se
 assert.equal(wardrobe.career.coins,0);assert.equal(equipCosmetic(wardrobe.career,wardrobe.settings,'mint'),true);
 assert.ok(validateSave(wardrobe));assert.equal(equipCosmetic(wardrobe.career,wardrobe.settings,'invalid'),false);
 console.log('PASS: damaged-save recovery preserves original; cosmetic purchases charge once');
+const legacy=initialSave();
+assert.deepEqual(savedMatchSlots(legacy),{quick:null,championship:null});
+const quick={id:'quick-snapshot',mode:'quick',snapshot:{}};
+const championship={id:'championship-snapshot',mode:'championship',snapshot:{}};
+legacy.active=quick;
+assert.deepEqual(savedMatchSlots(legacy),{quick,championship:null});
+legacy.active=championship;
+assert.deepEqual(savedMatchSlots(legacy),{quick:null,championship});
+legacy.matches={quick,championship};
+assert.deepEqual(savedMatchSlots(legacy),{quick,championship});
+assert.equal(validateSave({...initialSave(),matches:{quick:null,championship:null}}),true);
+assert.equal(validateSave({...initialSave(),matches:{quick:championship,championship:null}}),false);
+assert.equal(validateSave({...initialSave(),matches:{}}),false);
+console.log('PASS: legacy save migration, separate match slots and invalid-slot rejection');

@@ -1,0 +1,25 @@
+/* A viewport-sized lobby, with controls in dedicated layout tracks. */
+.home-screen{height:100dvh;min-height:0;max-height:100dvh;padding:100px 8vw 40px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;gap:24px;overflow:hidden;align-content:stretch}
+.home-screen .home-copy{grid-area:1/1;align-self:center;min-width:0}
+.home-screen .home-copy h1{font-size:clamp(48px,8dvh,96px);margin:12px 0;line-height:1.1}
+.home-screen .home-subtitle{font-size:clamp(12px,1.8dvh,16px);margin:20px 0 0;max-width:400px}
+.home-screen .hero-stage{grid-area:1/2/3/3;min-height:0;height:100%;width:100%;margin:0;transform:none;order:initial}
+.home-screen .toy-character{position:absolute;left:50%;top:50%;translate:-50% -50%;scale:.9}
+.home-screen .stage-orbit{width:min(34vw,400px);height:auto;aspect-ratio:1}
+.home-screen .stage-label{bottom:3%;font-size:10px}
+.home-screen .home-actions{grid-area:2/1;width:min(100%,420px);max-width:none;display:grid;gap:18px;align-self:end;order:initial}
+.home-screen .home-actions>.mode-entry{margin:0;min-height:80px;width:100%;padding:15px 24px;display:flex;align-items:center;justify-content:space-between;text-align:left;white-space:normal}
+.mode-entry strong,.mode-entry small{display:block}.mode-entry strong{font-size:24px;font-weight:900;line-height:1.2}.mode-entry small{font-size:12px;font-weight:500;margin-top:7px;opacity:.85;letter-spacing:.4px}.mode-entry>b{font-size:30px}
+.championship-entry{color:#1f63a5;background:linear-gradient(#fff,#e8f4ff);border:2px solid #a8cdeb;box-shadow:0 6px 0 #87b3d6,inset 0 2px 0 #fff}.championship-entry:hover{background:#fff}
+.lobby-tools{display:flex;align-items:center;gap:12px;margin-left:auto}.lobby-ranking{height:44px;padding:0 18px;background:#fff;border:2px solid #d5e5f3;border-radius:15px;color:#276cac;font-weight:800;box-shadow:0 4px 0 #d3e3f0;cursor:pointer}.home-screen .home-footer{display:none}
+.portrait{width:56px;height:56px;object-fit:cover;object-position:center 25%;border-radius:17px;border:3px solid white;box-shadow:0 2px 0 #c6dceb;flex-shrink:0;background:#e5f3ff}.portrait-you{display:grid;place-items:center;font-size:11px;font-weight:900;color:#2b80cb}.contestant-heading{display:flex;align-items:center;gap:16px;margin-bottom:15px}.contestant-heading h3{margin:0 0 7px}.contestant-heading p{margin:0;font-size:12px}.score-row .portrait{width:40px;height:40px;border-radius:12px}
+@media(max-width:600px) and (orientation:portrait){
+ .home-screen{padding:84px 24px max(24px,env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;gap:12px}
+ .home-screen .lobby-top{top:18px;left:22px;right:22px;gap:8px}.home-screen .brand{font-size:15px}.lobby-tools{gap:8px}.lobby-ranking{font-size:12px;padding:0 12px}
+ .home-screen .home-copy{grid-area:1/1}.home-screen .home-copy h1{font-size:clamp(38px,6.5dvh,56px);letter-spacing:-3px;margin:8px 0}.home-screen .home-copy h1 br{display:none}.home-screen .home-copy h1 em{margin-left:6px}.home-screen .home-copy .eyebrow{font-size:8px}.home-screen .home-subtitle{font-size:11px;line-height:1.7;margin-top:12px}
+ .home-screen .hero-stage{grid-area:2/1;overflow:hidden}.home-screen .toy-character{scale:.78}.home-screen .stage-orbit{width:230px}.home-screen .stage-label,.home-screen .hero-bubble{display:none}
+ .home-screen .home-actions{grid-area:3/1;width:100%;gap:14px}.home-screen .home-actions>.mode-entry{min-height:74px;padding:12px 20px}.mode-entry strong{font-size:22px}.mode-entry small{font-size:11px;margin-top:5px}
+}
+@media(max-width:600px) and (max-height:720px) and (orientation:portrait){.home-screen .toy-character{scale:.52}.home-screen .stage-orbit{width:175px}.home-screen{gap:8px}.home-screen .home-subtitle{margin-top:6px}}
+@media(max-height:570px) and (orientation:portrait){.home-screen .toy-character{scale:.3}.home-screen .home-subtitle{display:none}.home-screen .home-copy h1{font-size:36px}.home-screen .home-actions>.mode-entry{min-height:64px}}
+@media(max-height:540px) and (orientation:landscape){.home-screen{padding:66px 6vw 20px;gap:12px;grid-template-columns:1.1fr 1fr}.home-screen .lobby-top{top:10px}.home-screen .home-copy h1{font-size:40px;letter-spacing:-2px;margin:0}.home-screen .home-copy h1 br{display:none}.home-screen .home-copy .eyebrow,.home-screen .home-subtitle,.home-screen .stage-label{display:none}.home-screen .home-actions{gap:12px}.home-screen .home-actions>.mode-entry{min-height:64px;padding:10px 18px}.home-screen .mode-entry strong{font-size:20px}.home-screen .toy-character{scale:.62}.home-screen .stage-orbit{width:220px}.home-screen .hero-bubble{display:none}}

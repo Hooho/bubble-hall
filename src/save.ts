@@ -5,7 +5,12 @@ import { roster, playerName } from './roster';
 import { maps } from './maps';
 import { rewardNames } from './skills';
 export type Settings = { quality: 'low' | 'high'; reducedMotion: boolean; controls: 'auto' | 'touch'; palette: 'blue' | 'mint' | 'gold'; unlocked: string[] };
-export type Save = { career: Career; tournament: Tournament | null; active: { id: string; mode: 'quick' | 'championship'; snapshot: GameSnapshot } | null; settings: Settings };
+export type ActiveMatch = { id: string; mode: 'quick' | 'championship'; snapshot: GameSnapshot };
+export type MatchSlots = Record<ActiveMatch['mode'], ActiveMatch | null>;
+export type Save = { career: Career; tournament: Tournament | null; active: ActiveMatch | null; matches?: MatchSlots; settings: Settings };
+export function savedMatchSlots(save: Save): MatchSlots {
+  return save.matches ?? { quick: save.active?.mode==='quick'?save.active:null, championship: save.active?.mode==='championship'?save.active:null };
+}
 export const initialSave = (): Save => ({ career: newCareer(), tournament: null, active: null, settings: { quality: 'high', reducedMotion: false, controls: 'auto', palette: 'blue', unlocked: ['blue'] } });
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v: unknown, max = 1e12) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max;
@@ -34,6 +39,10 @@ function snapshot(v: unknown): boolean {
 }
 export function validateSave(v: unknown): v is Save {
   if (!object(v)||!object(v.career)||!object(v.settings)) return false;
+  if (v.matches !== undefined && (!object(v.matches) || !(['quick','championship'] as const).every(mode=>{
+    const m=v.matches[mode];
+    return m===null || (object(m)&&text(m.id)&&m.mode===mode&&snapshot(m.snapshot)&&(mode==='quick'||v.tournament!==null));
+  }))) return false;
   const c=v.career,s=v.settings;
   return points(c.points)&&points(c.crowns)&&num(c.coins)&&list(c.paid,100000,id=>text(id))&&list(c.history,10000,r=>object(r)&&text(r.id)&&text(r.date)&&['quick','championship'].includes(r.mode)&&difficulty(r.difficulty)&&num(r.place,64)&&r.place>=1&&num(r.points)&&list(r.standings,64,p=>object(p)&&ids.has(p.id)&&num(p.score))) && ['low','high'].includes(s.quality)&&typeof s.reducedMotion==='boolean'&&['auto','touch'].includes(s.controls)&&['blue','mint','gold'].includes(s.palette)&&list(s.unlocked,3,x=>['blue','mint','gold'].includes(x))&&s.unlocked.includes(s.palette) && (v.tournament===null||tournament(v.tournament)) && (v.active===null || (object(v.active)&&text(v.active.id)&&['quick','championship'].includes(v.active.mode)&&snapshot(v.active.snapshot)&& (v.active.mode==='quick'||v.tournament!==null)));
 }
