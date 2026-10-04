@@ -49,3 +49,43 @@ assert.equal(validateSave({...initialSave(),matches:{quick:null,championship:nul
 assert.equal(validateSave({...initialSave(),matches:{quick:championship,championship:null}}),false);
 assert.equal(validateSave({...initialSave(),matches:{}}),false);
 console.log('PASS: legacy save migration, separate match slots and invalid-slot rejection');
+
+const {roster,playerName}=await load('src/roster.ts');
+const {newSkills}=await load('src/skills.ts');
+const contestants=roster.slice(0,3);
+const richSnapshot={
+  mapId:'bay',difficulty:'hard',opponents:contestants,
+  tiles:Array.from({length:11},(_,y)=>Array.from({length:13},(_,x)=>x===0||x===12||y===0||y===10?'wall':'floor')),
+  actors:['player',...contestants.map(p=>p.id)].map((id,i)=>({
+    id,name:playerName(id),color:0x2f80ed,intelligence:3,personality:'careful',alive:true,
+    position:{x:1+i*2,y:1},spawn:{x:1+i*2,y:1},score:100+i,hits:1,crates:2,
+    bombCapacity:3,bombsActive:i===0?1:0,range:4,speed:1.2,respawnDelay:0,
+    moveCooldown:0.1,decisionCooldown:0.2,state:'escape',plannedPath:[{x:2,y:1}],blockedMoves:0,
+    skills:{...newSkills(),active:'super',shield:true,invincible:1.2},
+  })),
+  bombs:[{id:2,ownerId:'player',position:{x:2,y:1},timer:1.1,range:4,piercing:true}],
+  items:[{kind:'coin',position:{x:4,y:3}},{kind:'life',position:{x:5,y:3}}],
+  remaining:88,elapsed:32,coinTimer:1,bombId:2,rng:1234567,
+};
+const progress=initialSave();
+progress.career=structuredClone(save.career);
+progress.settings={quality:'low',reducedMotion:true,controls:'touch',palette:'mint',unlocked:['blue','mint']};
+progress.tournament=createTournament('hard');
+progress.matches={quick:{id:'quick-unfinished',mode:'quick',snapshot:richSnapshot},championship:{id:'champ-unfinished',mode:'championship',snapshot:{...richSnapshot,remaining:65,elapsed:55}}};
+progress.active=progress.matches.championship;
+assert.ok(validateSave(progress));
+const packed=store.transfer.exportJSON(progress);
+assert.deepEqual(store.transfer.parseJSON(packed),progress);
+const code=await store.transfer.createCode(progress);
+assert.match(code,/^BUBBLE-SAVE-V1\.(G|P)\./);
+assert.deepEqual(await store.transfer.parseCode(code.replace(/(.{50})/g,'$1\n')),progress);
+const beforeImport=storage.getItem('test');
+await assert.rejects(()=>store.transfer.parseCode('RIVER-SAVE-V2.P.eyJ2IjoyfQ'),/前缀/);
+assert.equal(storage.getItem('test'),beforeImport,'parsing must never write');
+const {checksum}=await load('src/shared/save-store.ts');
+const legacyFile=JSON.stringify({version:1,revision:19,savedAt:'2026-01-01T00:00:00Z',checksum:checksum(JSON.stringify(progress)),data:progress});
+assert.deepEqual(await store.transfer.parseFile({size:legacyFile.length,text:async()=>legacyFile}),progress);
+await store.write(progress,store.load().revision,{archive:true});
+assert.deepEqual(store.load().data,progress);
+assert.ok(validateSave(store.backup().data));
+console.log('PASS: legacy JSON and compressed code preserve both match slots, championship, score, cosmetics, bombs, timers, RNG and skills; wrong-game import leaves save untouched');

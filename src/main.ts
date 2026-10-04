@@ -9,7 +9,8 @@ import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, r
 import { itemGuideMarkup } from './item-guide';
 import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
 import { cosmetics, equipCosmetic } from './cosmetics';
-import { createSaveStore, checksum } from './shared/save-store';
+import { createSaveStore } from './shared/save-store';
+import { openSaveDialog } from './save-dialog';
 import { initialSave, validateSave, savedMatchSlots, type Save, type MatchSlots } from './save';
 import { rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
@@ -156,7 +157,7 @@ function avatarMarkup(id: string): string {
 }
 
 function playersMarkup(): string {
-  return page('选手图鉴', `<p class="competition-note">63 位挑战者 · 复用德州选手身份与头像，性格和能力独立配置。</p><p><a class="button" href="/?preview=nuwa">女娲战场试演 →</a></p><div class="competition-grid">${roster.map(p => `<article class="competition-card contestant-card"><div class="contestant-heading">${avatarMarkup(p.id)}<div><h3>${p.name}</h3><p>${personalityName[p.personality]} · 智力 ${'★'.repeat(p.intelligence)}</p></div></div><small>编号 ${p.id} · ${p.personality === 'brave' ? '优先逼近对手与进攻技能' : p.personality === 'careful' ? '优先逃生与保护技能' : '优先拾取补给、积累能力'}</small></article>`).join('')}</div>`,'settings');
+  return page('选手图鉴', `<p class="competition-note">63 位挑战者 · 认识每位对手的性格与能力。</p><p><a class="button" href="/?preview=nuwa">女娲战场试演 →</a></p><div class="competition-grid">${roster.map(p => `<article class="competition-card contestant-card"><div class="contestant-heading">${avatarMarkup(p.id)}<div><h3>${p.name}</h3><p>${personalityName[p.personality]} · 智力 ${'★'.repeat(p.intelligence)}</p></div></div><small>编号 ${p.id} · ${p.personality === 'brave' ? '优先逼近对手与进攻技能' : p.personality === 'careful' ? '优先逃生与保护技能' : '优先拾取补给、积累能力'}</small></article>`).join('')}</div>`,'settings');
 }
 
 function leaderboardMarkup(): string {
@@ -232,7 +233,7 @@ function settingsMarkup(): string {
     <div class="setting-row"><span><strong>操作方式</strong></span><select aria-label="操作方式" data-setting="controls"><option value="auto" ${settings.controls==='auto'?'selected':''}>自动</option><option value="touch" ${settings.controls==='touch'?'selected':''}>显示触控</option></select></div>
     <button class="setting-row" data-action="players"><span><strong>选手图鉴</strong><small>63 位选手 · 头像、性格与能力</small></span><b>查看 →</b></button>
     <button class="setting-row" data-action="howto"><span><strong>玩法说明</strong><small>计分、胜负和操作方式</small></span><b>查看 →</b></button>
-    <div class="competition-card"><h3>本地存档</h3><p>${saveError ? '⚠ 存档异常，请先导出备份再刷新。' : `版本 1 · 修订 ${saveRevision} · 每 2 秒自动保存比赛`}</p><p>离线存储在当前浏览器；换设备前请导出。德州数据不受影响。</p><div class="page-actions"><button class="button" data-action="export-save">导出存档</button><label class="button">导入存档<input id="save-file" type="file" accept="application/json,.json" style="max-width:180px"></label><button class="button" data-action="restore-backup">恢复上一份备份</button><button class="button" data-action="reset-progress">清空游戏进度</button></div></div>`;
+    <div class="competition-card"><h3>本地存档 · 进度胶囊</h3><p>${saveError ? '⚠ 存档异常，请先导出备份再刷新。' : `修订 ${saveRevision} · 每 2 秒自动保存比赛`}</p><p>文件和存档码包含相同进度。离线保存在当前浏览器，换设备前请导出备份。</p><div class="save-storage-actions"><button class="button" data-action="export-save">↓ 导出文件</button><button class="button" data-action="export-code">↗ 导出存档码</button><button class="button" data-action="import-save">↑ 导入文件</button><button class="button" data-action="import-code">↙ 导入存档码</button></div><div class="page-actions"><button class="button" data-action="restore-backup">恢复上一份备份</button><button class="button" data-action="reset-progress">清空游戏进度</button></div><p>自动保留上一份备份与最多 5 份历史恢复点；导入前先校验、确认，再保留旧进度。</p></div>`;
   return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">设置 / SETTINGS</span><span class="topline-spacer"></span></div><section class="simple-content"><p class="eyebrow">SYSTEM CHECK</p><h2>让街区<br><em>更顺手。</em></h2><div class="settings-list">${extras}<button class="setting-row" data-action="items"><span><strong>道具图鉴</strong><small>全部 10 种道具 · 效果、释放方式与限制</small></span><b>查看 →</b></button><button class="setting-row" data-action="toggle-sound"><span><strong>声音效果</strong><small>爆炸、拾取和胜负反馈</small></span><b id="sound-label">${soundEnabled ? '开启' : '关闭'}</b></button><div class="setting-row"><span><strong>操作方式</strong><small>键盘 / 触控会自动适配</small></span><b>AUTO</b></div><div class="setting-row"><span><strong>画面风格</strong><small>程序化低多边形 · 原型版</small></span><b>2.5D</b></div></div></section></main>`;
 }
 
@@ -250,13 +251,6 @@ function wireScreen(): void {
     if(select.dataset.setting==='controls') settings.controls=select.value as 'auto'|'touch';
     applyPreferences(); persist();
   }));
-  app.querySelector<HTMLInputElement>('#save-file')?.addEventListener('change',async event=>{
-    const input=event.target as HTMLInputElement; const file=input.files?.[0]; if(!file)return;
-    try { if(file.size>5_000_000)throw new Error('文件过大'); const imported=saveStore.parse(await file.text());
-      if(!confirm('导入将覆盖本游戏当前进度，是否继续？'))return;
-      await replaceSave(imported.data); render();
-    } catch(error) { alert(error instanceof Error?error.message:'导入失败'); } finally { input.value=''; }
-  });
   app.querySelectorAll<HTMLButtonElement>('[data-bonus]').forEach(button => button.addEventListener('click', () => { if (competition) { competition.bonus = button.dataset.bonus as Bonus; competition.needsReward = false; persist(); render(); } }));
   app.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => { selectedMap = button.dataset.map as MapId; render(); }));
   const bombButton = app.querySelector<HTMLButtonElement>('.bomb-button');
@@ -281,11 +275,8 @@ function handleAction(action: string): void {
   switch (action) {
     case 'continue-save': if(!suspended)break; if(saveError){alert(saveError);break;} restoring=true; matchMode=suspended.mode; quickId=suspended.id; selectedMap=suspended.snapshot.mapId; difficulty=suspended.snapshot.difficulty; opponents=suspended.snapshot.opponents; screen='game'; render(); break;
     case 'toggle-motion': settings.reducedMotion=!settings.reducedMotion; applyPreferences(); persist(); render(); break;
-    case 'export-save': {
-      const data: Save = { career,tournament:competition,active:suspended,matches,settings };
-      const raw = JSON.stringify({version:1,revision:saveRevision,savedAt:new Date().toISOString(),checksum:checksum(JSON.stringify(data)),data},null,2);
-      const url=URL.createObjectURL(new Blob([raw],{type:'application/json'})); const a=document.createElement('a'); a.href=url;a.download='泡泡大作战存档.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);break;
-    }
+    case 'export-save': case 'export-code': showSaveTransfer('export'); break;
+    case 'import-save': case 'import-code': showSaveTransfer('import'); break;
     case 'restore-backup': void restoreBackup(); break;
     case 'reset-progress': if(confirm('清空泡泡堂的积分、战绩和当前赛事？建议先导出备份。')){stopGame();adoptSave(initialSave());persist();render();}break;
     case 'leaderboard': screen = 'leaderboard'; render(); break;
@@ -354,16 +345,23 @@ function startQuickMatch(): void {
 
 async function replaceSave(data: Save): Promise<void> {
   await writeQueue;
-  const e = saveError ? await saveStore.recover(data) : await saveStore.write(data,saveRevision);
+  const e = saveError ? await saveStore.recover(data) : await saveStore.write(data,saveRevision,{archive:true});
   stopGame(); saveRevision=e.revision; saveError=''; adoptSave(e.data);
+}
+
+function showSaveTransfer(mode: 'export' | 'import', initialImport?: Save): void {
+  openSaveDialog({
+    mode, transfer: saveStore.transfer, initialImport,
+    snapshot: () => { captureMatch(); return structuredClone({ career, tournament: competition, active: suspended, matches, settings }); },
+    replace: async data => { await replaceSave(data); render(); },
+  });
 }
 
 async function restoreBackup(): Promise<void> {
   try {
     const e=saveStore.backup();
     if(!e){alert('尚无可恢复的备份');return;}
-    if(!confirm('恢复上一份备份？当前进度将被替换。'))return;
-    await replaceSave(e.data); render();
+    showSaveTransfer('import',e.data);
   } catch(error) { alert(error instanceof Error?error.message:'恢复失败'); }
 }
 
