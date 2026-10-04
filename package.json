@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prepare:players": "node scripts/prepare-players.mjs",
+    "predev": "npm run prepare:players",
+    "prebuild": "npm run prepare:players",
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "node skills.test.mjs && node competition.test.mjs && node storage.test.mjs",

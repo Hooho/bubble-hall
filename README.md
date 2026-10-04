@@ -4,12 +4,17 @@
 
 ## 开发与验证
 
+- 克隆时初始化依赖：`git submodule update --init --recursive`。`vendor/game-common` 固定公共选手资源版本。
 - 安装依赖：npm ci
 - 本地开发：npm run dev -- --host 127.0.0.1 --port 5174
 - 类型检查与生产构建：npm run build
 - 规则回归测试：npm test
 
 ## 已实现
+
+- 选手 ID、姓名和原始头像由 `vendor/game-common/players/` 统一提供。`src/roster.ts` 仅维护泡泡堂专属性格、智力和配色；女娲战场图集仍属于本游戏。
+- 开发和构建前自动运行 `prepare:players`，将公共头像复制到忽略版本管理的 `public/shared-players/`。需要手动刷新资源时运行 `npm run prepare:players`。构建后静态资源完整保留，运行不依赖 common 仓库位置或网络。
+- 旧 `public/avatars/` 副本暂保留用于迁移核对，运行已不引用；公共头像后续只在 common 中维护。
 
 - 女娲（选手 0）使用用户提供的四方向透明图集，移动时切换方向；其他选手继续使用原模型。图集路径为 `public/characters/nuwa/directions.png`，未重新生成或修改原画。四象限依次为正面、背面、左侧、右侧，脚底位置由渲染配置对齐。
 - 设置 → 选手图鉴 → 女娲战场试演，或打开 `/?preview=nuwa`。试演复用真实地图和游戏引擎，可切换方向、启动电脑对战，不读写正式存档。
