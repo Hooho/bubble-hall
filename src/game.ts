@@ -248,7 +248,7 @@ export class GameEngine {
     }
     this.bombs.splice(0, this.bombs.length, ...s.bombs); this.items.splice(0, this.items.length, ...s.items);
     this.bombs.forEach(b => this.addBombVisual(b)); this.items.forEach(i => this.createItemMesh(i));
-    this.remaining = s.remaining; this.elapsed = s.elapsed; this.coinTimer = s.coinTimer; this.bombId = s.bombId; this.rng.importState(s.rng);
+    this.remaining = Math.max(0, Math.min(s.remaining, MATCH_RULES.duration - s.elapsed)); this.elapsed = s.elapsed; this.coinTimer = s.coinTimer; this.bombId = s.bombId; this.rng.importState(s.rng);
     this.updateMeshes(); this.pause();
   }
 

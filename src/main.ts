@@ -113,10 +113,10 @@ function homeMarkup(): string {
       <div class="home-copy">
         <p class="eyebrow">READY, SET, POP!</p>
         <h1>泡泡<br><em>大作战<span>!</span></em></h1>
-        <p class="home-subtitle">三分钟积分对战。<br>炸箱 +10，命中 +100；存活到最后或超时争最高分。</p>
+        <p class="home-subtitle">两分钟积分对战。<br>炸箱 +10，命中 +100；存活到最后或超时争最高分。</p>
       </div>
       <div class="home-actions">
-        <button class="button button-primary mode-entry" data-action="enter-quick"><span><strong>单次对战</strong><small>${matches.quick?'继续上次比赛':'轻松开局 · 三分钟对战'}</small></span><b aria-hidden="true">▶</b></button>
+        <button class="button button-primary mode-entry" data-action="enter-quick"><span><strong>单次对战</strong><small>${matches.quick?'继续上次比赛':'轻松开局 · 两分钟对战'}</small></span><b aria-hidden="true">▶</b></button>
         <button class="button mode-entry championship-entry" data-action="enter-championship"><span><strong>冠军之路</strong><small>${matches.championship || (competition&&competition.round!=='complete')?'继续上次比赛':'64 位选手 · 冲击冠军'}</small></span><b aria-hidden="true">♛</b></button>
       </div>
       <div class="home-footer">随时开局 · 无需登录 <span>BLUE BAY / 01</span></div>
@@ -128,7 +128,7 @@ function setupMarkup(): string {
     <main class="screen setup-screen">
       <div class="topline"><button class="icon-button" data-action="home" aria-label="返回">←</button><span class="screen-kicker">准备出发 / 01</span><span class="topline-spacer"></span></div>
       <section class="setup-layout">
-        <div class="setup-intro"><p class="eyebrow">MATCH SETUP</p><h2>选好你的<br><em>战术。</em></h2><p>通用比赛规则：每场 3 分钟。炸箱 +10，命中对手 +100。死亡即淘汰；最后一人提前获胜，否则超时比较存活者积分；自爆和无敌期间受击不计分。</p></div>
+        <div class="setup-intro"><p class="eyebrow">MATCH SETUP</p><h2>选好你的<br><em>战术。</em></h2><p>通用比赛规则：每场 2 分钟。炸箱 +10，命中对手 +100。死亡即淘汰；最后一人提前获胜，否则超时比较存活者积分；自爆和无敌期间受击不计分。</p></div>
         <div class="setup-panel">
           <div class="setup-block"><div class="field-label">地图 / MAP</div><div class="map-grid">${maps.map(m => `<button class="map-option ${selectedMap === m.id ? 'selected' : ''}" data-map="${m.id}"><strong>${m.name}</strong><small>${m.caption}</small></button>`).join('')}<button class="map-option" data-action="random-map">随机地图 ↻</button></div></div>
           <div class="setup-block"><div class="field-label">电脑难度 / AI</div><div class="difficulty-row">
@@ -136,7 +136,7 @@ function setupMarkup(): string {
           </div></div>
           <div class="skill-guide"><strong>本场开放技能补给</strong><p>炸箱获取成长、护盾、额外生命和主动技能。E 释放技能，F 替换脚下道具；手机使用独立技能按钮。</p><p>无敌 3 秒 · 疾跑 5 秒 · 连发 4 秒（按住放弹）<br>超级炸弹：先准备，再放弹，可穿透一个箱子。</p></div>
           <div class="reward-gallery">${(Object.keys(rewardNames) as Reward[]).map(kind => `<div>${rewardIcon(kind)}<small>${rewardNames[kind]}</small></div>`).join('')}</div>
-          <div class="setup-facts"><span><b>01</b> 玩家</span><span><b>03</b> 电脑</span><span><b>180s</b> 单局</span></div>
+          <div class="setup-facts"><span><b>01</b> 玩家</span><span><b>03</b> 电脑</span><span><b>120s</b> 单局</span></div>
           ${confirmNewMatch ? `<section class="save-warning" aria-labelledby="replace-match-title"><h3 id="replace-match-title">发现未完成的比赛</h3><p>开始新比赛会替换这一局的存档，积分和历史战绩不会清空。</p><div class="page-actions"><button class="button button-primary" data-action="play-confirmed">确认开始新比赛</button><button class="button" data-action="continue-save">继续旧比赛</button><button class="button" data-action="cancel-new-match">取消</button></div></section>` : '<button class="button button-primary button-large full-width" data-action="play">进入街区 <span>→</span></button>'}
         </div>
       </section>
@@ -199,7 +199,7 @@ function gameMarkup(): string {
     <main class="screen game-screen">
       <div class="game-topbar">
         <div class="match-id"><span class="live-dot"></span><span>${mapInfo(selectedMap).name}</span><small>SOLO RUN</small></div>
-        <div class="round-clock"><small>ROUND TIME</small><strong id="timer">03:00</strong></div>
+        <div class="round-clock"><small>ROUND TIME</small><strong id="timer">02:00</strong></div>
         <div class="game-actions"><button class="mini-action" data-action="pause">Ⅱ</button><button class="mini-action desktop-only" data-action="restart">↻</button></div>
       </div>
       <div class="game-layout">
@@ -237,7 +237,7 @@ function settingsMarkup(): string {
 }
 
 function howtoMarkup(): string {
-  return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">通用比赛规则</span></div><section class="simple-content howto-content"><h2>三分钟，<em>争最高分。</em></h2><div class="rule-grid"><article><h3>炸箱 +10</h3><p>每个被炸毁的箱子计分一次，并可能掉落道具。</p></article><article><h3>命中 +100</h3><p>有效命中对手或击破护盾得分。自爆、命中无敌选手不计分；同一次连锁对同一人只计一次，归属实际伤害炸弹的主人。</p></article><article><h3>按积分判胜</h3><p>每场限时 3 分钟，死亡即淘汰（额外生命道具除外）。只剩一人立即获胜；否则时间结束比较存活者积分，最高分获胜，并列则平局。全部阵亡为平局。</p></article></div><button class="button button-primary" data-action="back">知道了 →</button></section></main>`;
+  return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">通用比赛规则</span></div><section class="simple-content howto-content"><h2>两分钟，<em>争最高分。</em></h2><div class="rule-grid"><article><h3>炸箱 +10</h3><p>每个被炸毁的箱子计分一次，并可能掉落道具。</p></article><article><h3>命中 +100</h3><p>有效命中对手或击破护盾得分。自爆、命中无敌选手不计分；同一次连锁对同一人只计一次，归属实际伤害炸弹的主人。</p></article><article><h3>按积分判胜</h3><p>每场限时 2 分钟，死亡即淘汰（额外生命道具除外）。只剩一人立即获胜；否则时间结束比较存活者积分，最高分获胜，并列则平局。全部阵亡为平局。</p></article></div><button class="button button-primary" data-action="back">知道了 →</button></section></main>`;
 }
 
 function wireScreen(): void {

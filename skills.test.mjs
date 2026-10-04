@@ -3,6 +3,19 @@ import { build } from 'esbuild';
 const bundle = await build({ entryPoints: ['src/game.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
 const { GameEngine } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const engine = Object.create(GameEngine.prototype);
+const rulesBundle = await build({ entryPoints: ['src/match-rules.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
+const { MATCH_RULES } = await import(`data:text/javascript;base64,${Buffer.from(rulesBundle.outputFiles[0].text).toString('base64')}`);
+assert.equal(MATCH_RULES.duration, 120, 'all match modes use a two-minute limit');
+const restored = Object.create(GameEngine.prototype);
+Object.assign(restored, {
+  start() {}, clearGroup() {}, createMapMeshes() {}, updateMeshes() {}, pause() {},
+  actors: new Map(), tileMeshes: new Map(), bombs: [], items: [], rng: { importState() {} },
+});
+for (const [remaining, elapsed, expected] of [[180,0,120],[150,30,90],[40,140,0],[90,30,90]]) {
+  restored.restore({ actors: [], bombs: [], items: [], tiles: [], remaining, elapsed });
+  assert.equal(restored.remaining, expected, 'resume preserves elapsed time under the new limit');
+}
+console.log('PASS: two-minute match limit and legacy countdown migration');
 const fresh = () => ({ active: null, armed: false, shield: false, life: false, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });
 const actor = { id: 'player', alive: true, skills: fresh(), position: { x: 1, y: 1 }, bombCapacity: 1, range: 2, speed: 1 };
 engine.listeners = new Set();
