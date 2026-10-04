@@ -34,6 +34,7 @@ const saveStore = createSaveStore<Save>('bubble-club:save:v1', validateSave);
 let settings = initialSave().settings;
 let suspended: Save['active'] = null;
 let restoring = false;
+let confirmNewMatch = false;
 let saveRevision = 0;
 let saveError = '';
 let writeQueue = Promise.resolve();
@@ -132,7 +133,7 @@ function setupMarkup(): string {
           <div class="skill-guide"><strong>本场开放技能补给</strong><p>炸箱获取成长、护盾、额外生命和主动技能。E 释放技能，F 替换脚下道具；手机使用独立技能按钮。</p><p>无敌 3 秒 · 疾跑 5 秒 · 连发 4 秒（按住放弹）<br>超级炸弹：先准备，再放弹，可穿透一个箱子。</p></div>
           <div class="reward-gallery">${(Object.keys(rewardNames) as Reward[]).map(kind => `<div>${rewardIcon(kind)}<small>${rewardNames[kind]}</small></div>`).join('')}</div>
           <div class="setup-facts"><span><b>01</b> 玩家</span><span><b>03</b> 电脑</span><span><b>180s</b> 单局</span></div>
-          <button class="button button-primary button-large full-width" data-action="play">进入街区 <span>→</span></button>
+          ${confirmNewMatch ? `<section class="save-warning" aria-labelledby="replace-match-title"><h3 id="replace-match-title">发现未完成的比赛</h3><p>开始新比赛会替换这一局的存档，积分和历史战绩不会清空。</p><div class="page-actions"><button class="button button-primary" data-action="play-confirmed">确认开始新比赛</button><button class="button" data-action="continue-save">继续旧比赛</button><button class="button" data-action="cancel-new-match">取消</button></div></section>` : '<button class="button button-primary button-large full-width" data-action="play">进入街区 <span>→</span></button>'}
         </div>
       </section>
     </main>`;
@@ -291,8 +292,17 @@ function handleAction(action: string): void {
     case 'tournament-play': progressTournament(); break;
     case 'skill': game?.usePlayerSkill(); break;
     case 'swap': game?.replacePlayerSkill(); break;
-    case 'start': screen = 'setup'; render(); break;
-    case 'play': if(suspended&&!confirm('开始新比赛将替换未完成的单局存档，是否继续？'))break; stopGame(); suspended=null; quickId = crypto.randomUUID(); matchMode = 'quick'; opponents = [...roster].sort(() => Math.random() - 0.5).slice(0, 3); audio.play('start'); startNewRound = true; screen = 'game'; render(); break;
+    case 'start': confirmNewMatch=false; screen = 'setup'; render(); break;
+    case 'cancel-new-match': confirmNewMatch=false; render(); break;
+    case 'play':
+      if(suspended){
+        confirmNewMatch=true; render();
+        const button=app.querySelector<HTMLButtonElement>('[data-action="play-confirmed"]');
+        button?.scrollIntoView({block:'center'});button?.focus({preventScroll:true});
+        break;
+      }
+      startQuickMatch(); break;
+    case 'play-confirmed': if(screen==='setup'&&confirmNewMatch)startQuickMatch(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
     case 'home': stopGame(); screen = 'home'; render(); break;
     case 'howto': screen = 'howto'; render(); break;
@@ -321,7 +331,15 @@ function handleAction(action: string): void {
     case 'toggle-sound': soundEnabled = audio.toggle(); render(); break;
     default: break;
   }
-  if (['play','new-tournament','tournament-play','home','pause','restart','reset-progress'].includes(action)) persist();
+  if (['new-tournament','tournament-play','home','pause','restart','reset-progress'].includes(action)) persist();
+}
+
+function startQuickMatch(): void {
+  confirmNewMatch=false;
+  stopGame(); suspended=null; quickId=crypto.randomUUID(); matchMode='quick';
+  opponents=[...roster].sort(()=>Math.random()-0.5).slice(0,3);
+  audio.play('start');startNewRound=true;screen='game';render();
+  window.scrollTo(0,0);persist();
 }
 
 async function replaceSave(data: Save): Promise<void> {
