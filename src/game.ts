@@ -578,7 +578,7 @@ export class GameEngine {
     label.name = 'name-label';
     label.position.set(0, 1.38, 0);
     group.add(body, head, visor, ring, label);
-    if (id === '0') { attachNuwa(group); label.position.y = 1.2; }
+    if (id === '0') { attachNuwa(group); label.position.y = 1.5; }
     this.actorGroup.add(group);
     this.actors.set(id, {
       score: 0, hits: 0, crates: 0, respawnDelay: 0,

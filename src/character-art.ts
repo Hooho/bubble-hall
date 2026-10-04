@@ -11,8 +11,10 @@ export function attachNuwa(group: THREE.Group): void {
   const sprite = new THREE.Sprite(material);
   sprite.name = 'character-art';
   sprite.center.set(0.56, 0.42);
-  sprite.position.y = 0.035;
-  sprite.scale.set(0.78, 0.78, 1);
+  // Lift the billboard out of the front wall's depth plane while keeping
+  // its projected center on the same tile (camera elevation: 18 / 9).
+  sprite.position.set(0, 0.8, 0.4);
+  sprite.scale.set(1.1, 1.1, 1);
   sprite.visible = false;
   group.add(sprite);
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.23, 24), new THREE.MeshBasicMaterial({ color: 0x385366, transparent: true, opacity: 0.16, depthWrite: false }));
