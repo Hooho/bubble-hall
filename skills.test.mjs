@@ -3,6 +3,17 @@ import { build } from 'esbuild';
 const bundle = await build({ entryPoints: ['src/game.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
 const { GameEngine } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const engine = Object.create(GameEngine.prototype);
+const artBundle = await build({ entryPoints: ['src/character-art.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
+const { faceCharacter, NUWA_FRAMES } = await import(`data:text/javascript;base64,${Buffer.from(artBundle.outputFiles[0].text).toString('base64')}`);
+let uv;
+const sprite = { material: { map: { offset: { set: (...values) => { uv = values; } } } }, center: { y: 0 } };
+for (const direction of ['up','down','left','right']) {
+  faceCharacter({ getObjectByName: () => sprite }, direction);
+  assert.deepEqual(uv, NUWA_FRAMES[direction]);
+  assert.ok(sprite.center.y > 0 && sprite.center.y < 0.1);
+}
+assert.doesNotThrow(() => faceCharacter({ getObjectByName: () => undefined }, 'down'));
+console.log('PASS: Nuwa four-direction atlas mapping, foot anchors and legacy actor fallback');
 const rulesBundle = await build({ entryPoints: ['src/match-rules.ts'], bundle: true, platform: 'node', format: 'esm', write: false });
 const { MATCH_RULES } = await import(`data:text/javascript;base64,${Buffer.from(rulesBundle.outputFiles[0].text).toString('base64')}`);
 assert.equal(MATCH_RULES.duration, 120, 'all match modes use a two-minute limit');

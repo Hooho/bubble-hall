@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { attachNuwa, faceCharacter } from './character-art';
 import { mapInfo, type MapId } from './maps';
 import { roster, type Contestant } from './roster';
 import type { Bonus } from './tournament';
@@ -383,6 +384,11 @@ export class GameEngine {
     this.tryMove(player, direction);
   }
 
+  public faceActor(id: string, direction: Direction): void {
+    const actor = this.actors.get(id);
+    if (actor) faceCharacter(actor.group, direction);
+  }
+
   public placePlayerBomb(): void {
     const player = this.actors.get('player');
     if (!player || !player.alive || !this.running) return;
@@ -569,8 +575,10 @@ export class GameEngine {
     ring.name = 'ring';
     ring.position.y = 0.03;
     const label = this.createActorLabel(id === 'player' ? 'YOU' : name, color, id === 'player');
+    label.name = 'name-label';
     label.position.set(0, 1.38, 0);
     group.add(body, head, visor, ring, label);
+    if (id === '0') { attachNuwa(group); label.position.y = 2.55; }
     this.actorGroup.add(group);
     this.actors.set(id, {
       score: 0, hits: 0, crates: 0, respawnDelay: 0,
@@ -1110,6 +1118,7 @@ export class GameEngine {
     const occupant = [...this.actors.values()].find((candidate) => candidate.alive && candidate.id !== actor.id && samePosition(candidate.position, next));
     if (occupant) return false;
     actor.position = next;
+    faceCharacter(actor.group, direction);
     actor.moveCooldown = 0.14 / Math.min(1.7, actor.speed * (actor.skills.dash > 0 ? 1.4 : 1));
     this.collectItem(actor);
     return true;

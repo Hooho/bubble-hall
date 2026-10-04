@@ -156,7 +156,7 @@ function avatarMarkup(id: string): string {
 }
 
 function playersMarkup(): string {
-  return page('选手图鉴', `<p class="competition-note">63 位挑战者 · 复用德州选手身份与头像，性格和能力独立配置。</p><div class="competition-grid">${roster.map(p => `<article class="competition-card contestant-card"><div class="contestant-heading">${avatarMarkup(p.id)}<div><h3>${p.name}</h3><p>${personalityName[p.personality]} · 智力 ${'★'.repeat(p.intelligence)}</p></div></div><small>编号 ${p.id} · ${p.personality === 'brave' ? '优先逼近对手与进攻技能' : p.personality === 'careful' ? '优先逃生与保护技能' : '优先拾取补给、积累能力'}</small></article>`).join('')}</div>`,'settings');
+  return page('选手图鉴', `<p class="competition-note">63 位挑战者 · 复用德州选手身份与头像，性格和能力独立配置。</p><p><a class="button" href="/?preview=nuwa">女娲战场试演 →</a></p><div class="competition-grid">${roster.map(p => `<article class="competition-card contestant-card"><div class="contestant-heading">${avatarMarkup(p.id)}<div><h3>${p.name}</h3><p>${personalityName[p.personality]} · 智力 ${'★'.repeat(p.intelligence)}</p></div></div><small>编号 ${p.id} · ${p.personality === 'brave' ? '优先逼近对手与进攻技能' : p.personality === 'careful' ? '优先逃生与保护技能' : '优先拾取补给、积累能力'}</small></article>`).join('')}</div>`,'settings');
 }
 
 function leaderboardMarkup(): string {
