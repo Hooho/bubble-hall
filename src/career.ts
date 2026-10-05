@@ -1,5 +1,5 @@
 import { roster } from './roster';
-import { multiplier, placementPoints, tournamentOrder, winnerIds, type Tournament, type Standing } from './tournament';
+import { multiplier, placementPoints, tournamentOrder, winnerIds, advancingIds, advancementPoints, type Tournament, type Standing } from './tournament';
 import type { Difficulty } from './game';
 export type RecordEntry = { id: string; date: string; mode: 'quick' | 'championship'; difficulty: Difficulty; place: number; points: number; standings: { id: string; score: number }[] };
 export type Career = { points: Record<string, number>; crowns: Record<string, number>; history: RecordEntry[]; paid: string[]; coins: number };
@@ -16,8 +16,8 @@ export function settleQuick(c: Career, id: string, difficulty: Difficulty, rows:
 export function settleTournament(c: Career, t: Tournament): void {
   for (const stage of t.archive) for (const m of stage.matches) {
     if (c.paid.includes(m.id)) continue;
-    const advancement = stage.round === 'first' ? 40 : stage.round === 'second' ? 80 : stage.round === 'semi' ? 120 : 0;
-    for (const r of m.standings ?? []) c.points[r.id] = (c.points[r.id] ?? 0) + Math.round((r.hits * 20 + (r.id === m.winner ? advancement : 0)) * multiplier[t.difficulty]);
+    const advancement = advancementPoints(t,stage.round);
+    for (const r of m.standings ?? []) c.points[r.id] = (c.points[r.id] ?? 0) + Math.round((r.hits * 20 + (advancingIds(t,m).includes(r.id) ? advancement : 0)) * multiplier[t.difficulty]);
     c.paid.push(m.id);
   }
   if (t.round !== 'complete' || c.paid.includes(t.id)) return;
@@ -27,7 +27,7 @@ export function settleTournament(c: Career, t: Tournament): void {
   const place = order.indexOf('player') + 1;
   const points = t.archive.flatMap(s => s.matches.map(m => {
     const r = m.standings?.find(a => a.id === 'player');
-    const bonus = m.winner !== 'player' ? 0 : s.round === 'first' ? 40 : s.round === 'second' ? 80 : s.round === 'semi' ? 120 : 0;
+    const bonus = advancingIds(t,m).includes('player') ? advancementPoints(t,s.round) : 0;
     return r ? Math.round((r.hits * 20 + bonus) * multiplier[t.difficulty]) : 0;
   })).reduce((a,b)=>a+b,0) + Math.round(placementPoints(place) * multiplier[t.difficulty]);
   c.history.unshift({ id: t.id, date: new Date().toISOString(), mode: 'championship', difficulty: t.difficulty, place, points, standings: order.map(id => ({ id, score: c.points[id] ?? 0 })) });

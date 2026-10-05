@@ -5,7 +5,7 @@ import './competition.css';
 import './lobby.css';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName, playerAvatar } from './roster';
-import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundNames, tournamentOrder, ranked, type Tournament, type Bonus, type Match } from './tournament';
+import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundTitle, isTopTwo, advancingIds, replayMembers, tournamentOrder, ranked, type Tournament, type Bonus, type Match } from './tournament';
 import { itemGuideMarkup } from './item-guide';
 import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
 import { cosmetics, equipCosmetic } from './cosmetics';
@@ -161,19 +161,19 @@ function playersMarkup(): string {
 }
 
 function leaderboardMarkup(): string {
-  return page('本地积分榜', `<p class="competition-note">长期积分与战场分数分开：有效命中 +20，单次胜利 +100；晋级 +40 / +80 / +120，冠军 +400。难度倍率 1 / 1.3 / 1.6 / 2。电脑只通过实际或模拟比赛积分。</p><div class="competition-card">${leaderboard(career).map((p,i)=>`<div class="score-row ${p.id === 'player' ? 'you' : ''}"><span>${i+1}</span>${avatarMarkup(p.id)}<strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`).join('')}</div>`);
+  return page('本地积分榜', `<p class="competition-note">长期积分与战场分数分开：有效命中 +20，单次胜利 +100；晋级 +40 / +60 / +80 / +120，冠军 +400。难度倍率 1 / 1.3 / 1.6 / 2。电脑只通过实际或模拟比赛积分。</p><div class="competition-card">${leaderboard(career).map((p,i)=>`<div class="score-row ${p.id === 'player' ? 'you' : ''}"><span>${i+1}</span>${avatarMarkup(p.id)}<strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`).join('')}</div>`);
 }
 
 function tournamentMarkup(): string {
   const t = competition;
   if (!t) return page('冠军赛', '<p>64 名选手，一座奖杯。</p><button class="button button-primary" data-action="new-tournament">创建赛事</button>');
   const order = tournamentOrder(t);
-  const groupCards = (matches: Match[]) => matches.map((m,i)=>({m,i})).sort((a,b)=>Number(b.m.members.includes('player'))-Number(a.m.members.includes('player'))).map(({m,i})=>`<article class="competition-card ${m.members.includes('player')?'my-match':''}"><strong>第 ${i+1} 组${m.members.includes('player')?' · 我的比赛':''}</strong>${(m.standings??m.members.map(id=>({id,score:null}))).map(p=>`<div class="score-row ${p.id==='player'?'you':''}"><strong>${playerName(p.id)}</strong><span>${p.score??'待赛'}</span>${m.winner===p.id?'<b>胜出</b>':''}</div>`).join('')}</article>`).join('');
-  return page(t.round === 'complete' ? '冠军诞生' : roundNames[t.round], `<p class="competition-note">64 → 16 → 4 → 2 · 电脑组快速模拟，玩家组实际对战。晋级同分安排加赛；决赛先胜两局夺冠。</p>
+  const groupCards = (matches: Match[], final = false) => matches.map((m,i)=>({m,i})).sort((a,b)=>Number(b.m.members.includes('player'))-Number(a.m.members.includes('player'))).map(({m,i})=>`<article class="competition-card ${m.members.includes('player')?'my-match':''}"><strong>第 ${i+1} 组${m.members.includes('player')?' · 我的比赛':''}</strong>${(m.standings??m.members.map(id=>({id,score:null}))).map(p=>`<div class="score-row ${p.id==='player'?'you':''}"><strong>${playerName(p.id)}</strong><span>${p.score??'待赛'}</span>${isTopTwo(t)?(advancingIds(t,m).includes(p.id)?'<b>晋级</b>':final&&m.winner===p.id?'<b>冠军</b>':''):(m.winner===p.id?'<b>胜出</b>':'')}</div>`).join('')}</article>`).join('');
+  return page(t.round === 'complete' ? '冠军诞生' : roundTitle(t), `<p class="competition-note">${isTopTwo(t)?'64 → 32 → 16 → 8 → 4 · 每组前两名晋级，四人总决赛决出冠亚季军。存活优先，再按本局得分排名；晋级线同分加赛。':'旧赛制存档 · 四人组第一名晋级，决赛三局两胜；本赛事按原规则完成。'}</p>
     ${t.round === 'complete' ? `<div class="medal-strip">${order.slice(0, 4).map((id, i) => `<b>${['冠军','亚军','季军','第四名'][i]} · ${playerName(id)}</b>`).join('')}</div><p>你的名次：第 ${order.indexOf('player') + 1} 名</p>` : `<div class="page-actions">${t.needsReward ? (['capacity','speed','shield'] as Bonus[]).map(b => `<button class="button button-primary" data-bonus="${b}">下一场：${b === 'capacity' ? '容量 +1' : b === 'speed' ? '速度 +1 档' : '一次护盾'}</button>`).join('') : `<button class="button button-primary" data-action="tournament-play">${pendingPlayerMatch(t) ? t.replay ? '进入同分加赛' : '进入我的比赛' : '模拟其余比赛并继续'}</button>`}</div>`}
-    ${t.finals.length?`<div class="final-score">决赛大比分 ${t.finals.map(id=>`${playerName(id)} ${t.finalWins[id]??0}`).join(' : ')}</div>`:''}
-    <div class="competition-grid">${groupCards(t.matches)}</div>
-    ${t.archive.length?`<h2>已完成轮次</h2>${t.archive.map((g,i)=>`<details class="stage-archive"><summary>${roundNames[g.round]} · ${g.matches.length} 场 <span>查看赛果</span></summary><div class="competition-grid">${groupCards(g.matches)}</div></details>`).join('')}`:''}`);
+    ${!isTopTwo(t)&&t.finals.length?`<div class="final-score">决赛大比分 ${t.finals.map(id=>`${playerName(id)} ${t.finalWins[id]??0}`).join(' : ')}</div>`:''}
+    <div class="competition-grid">${groupCards(t.matches,t.round==='final')}</div>
+    ${t.archive.length?`<h2>已完成轮次</h2>${t.archive.map((g,i)=>`<details class="stage-archive"><summary>${roundTitle(t,g.round)} · ${g.matches.length} 场 <span>查看赛果</span></summary><div class="competition-grid">${groupCards(g.matches,g.round==='final')}</div></details>`).join('')}`:''}`);
 }
 
 function progressTournament(): void {
@@ -184,12 +184,12 @@ function progressTournament(): void {
   for (const m of t.matches) if (!m.standings && !m.members.includes('player')) submitMatch(t, m, simulate(m.members));
   const match = pendingPlayerMatch(t);
   if (!match) { advance(t); settleTournament(career,t); screen = 'tournament'; render(); return; }
-  const members = t.replay ?? match.members;
+  const members = replayMembers(t,match) ?? match.members;
   if (!members.includes('player')) { submitMatch(t, match, simulate(members)); advance(t); settleTournament(career,t); screen = 'tournament'; render(); return; }
   matchMode = 'championship'; difficulty = t.difficulty;
   selectedMap = ['semi','bronze','final'].includes(t.round) ? 'arena' : t.round === 'first' ? 'garden' : 'factory';
   opponents = members.filter(id => id !== 'player').map(id => roster.find(p => p.id === id)!);
-  replaying = !!t.replay;
+  replaying = !!replayMembers(t,match);
   stopGame(); startNewRound = true; screen = 'game'; render();
 }
 
@@ -223,6 +223,17 @@ function resultMarkup(): string {
   const result = game?.getResult() ?? 'draw';
   const standings = ranked(game?.getStandings() ?? []);
   const copy = result === 'win' ? ['本场获胜！', '成为最后的存活者，或超时以最高分胜出。'] : result === 'lose' ? ['比赛结束', '下次争取更多有效命中。'] : ['本场平局', '存活者最高分并列，或所有选手同归于尽。'];
+  if (matchMode === 'championship' && competition && isTopTwo(competition)) {
+    const finished = competition.archive.at(-1)?.matches.find(m=>m.members.includes('player'));
+    if (replayMembers(competition,pendingPlayerMatch(competition) ?? {id:'',members:[],standings:null,winner:null})) {
+      copy[0]='需要同分加赛'; copy[1]='晋级线或决赛名次同分，返回签表继续加赛。';
+    } else if (competition.round === 'complete') {
+      copy[0]=competition.podium[0]==='player'?'夺得总冠军！':'总决赛完成'; copy[1]=`本次冠军赛获得第 ${tournamentOrder(competition).indexOf('player')+1} 名。`;
+    } else if (finished) {
+      copy[0]=advancingIds(competition,finished).includes('player')?'晋级成功！':'本轮止步';
+      copy[1]='每组前两名晋级，存活优先，再按得分排名。';
+    }
+  }
   copy[1] += `</p><div class="result-standings">${standings.map((a,i)=>`<div class="result-standing ${a.id==='player'?'you':''}"><b class="place-number">${i+1}</b><div><strong>${playerName(a.id)}</strong><small>${a.alive?'存活':'已淘汰'} · 命中 ${a.hits} · 炸箱 ${a.crates}</small></div><strong>${a.score}<small>本局分</small></strong></div>`).join('')}</div><p class="result-copy">长期积分已自动结算；赛事全部结束后记录最终名次。`;
   return `<main class="screen result-screen result-${result}"><div class="result-burst">${result === 'win' ? '✦' : result === 'lose' ? '×' : '•'}</div><p class="eyebrow">ROUND COMPLETE · ${result.toUpperCase()}</p><h1>${copy[0]}</h1><p class="result-copy">${copy[1]}</p><div class="result-actions"><button class="button button-primary button-large" data-action="restart">${matchMode === 'championship' ? '返回赛事签表' : '再来一局'} <span>→</span></button><button class="button button-ghost" data-action="home">返回主菜单</button></div><div class="result-note">NO LOGIN · LOCAL SCORE</div></main>`;
 }

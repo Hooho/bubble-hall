@@ -22,9 +22,26 @@ const list = (v: unknown, max: number, check: (x: any) => boolean): boolean => A
 const idList = (v: unknown, max: number) => list(v,max,x=>ids.has(x)) && new Set(v as string[]).size === (v as string[]).length;
 const points = (v: unknown) => object(v) && Object.entries(v).every(([id,n])=>ids.has(id)&&num(n));
 const standing = (v: unknown): boolean => object(v) && ids.has(v.id) && num(v.score) && num(v.hits) && num(v.crates) && typeof v.alive === 'boolean';
-const match = (v: unknown): boolean => object(v) && text(v.id) && idList(v.members,4) && v.members.length>=2 && (v.standings===null ? v.winner===null : list(v.standings,4,standing) && v.standings.length===v.members.length && new Set(v.standings.map((r:any)=>r.id)).size===v.members.length && v.standings.every((r:any)=>v.members.includes(r.id)) && v.members.includes(v.winner));
+function match(v: unknown, topTwo: boolean, final: boolean): boolean {
+  if (!object(v) || !text(v.id) || !idList(v.members,4) || v.members.length < 2 || (topTwo && v.members.length !== 4)) return false;
+  const rows = (value: unknown) => list(value,4,standing) && (value as any[]).length===v.members.length && new Set((value as any[]).map(r=>r.id)).size===v.members.length && (value as any[]).every(r=>v.members.includes(r.id));
+  if (v.standings === null) {
+    if(v.winner !== null) return false;
+    if(v.pendingRows !== undefined || v.rankGroups !== undefined) {
+      if(!topTwo || !rows(v.pendingRows) || !list(v.rankGroups,4,g=>idList(g,4)&&g.length>0))return false;
+      const order=v.rankGroups.flat();
+      if(order.length!==v.members.length || new Set(order).size!==order.length || order.some((id:string)=>!v.members.includes(id)))return false;
+    }
+    return true;
+  }
+  if (!rows(v.standings) || !v.members.includes(v.winner)) return false;
+  return !topTwo || (idList(v.qualified,2) && v.qualified.length===(final?0:2) && v.qualified.every((id:string,i:number)=>v.standings[i].id===id));
+}
 function tournament(v: unknown): boolean {
-  return object(v) && text(v.id) && difficulty(v.difficulty) && ['first','second','semi','bronze','final','complete'].includes(v.round) && list(v.matches,16,match) && list(v.archive,12,s=>object(s)&&['first','second','semi','bronze','final'].includes(s.round)&&list(s.matches,16,match)) && list(v.eliminated,2,a=>idList(a,64)) && idList(v.finals,2) && idList(v.bronze,2) && list(v.podium,4,id=>id===null||ids.has(id)) && points(v.finalWins) && [null,'capacity','speed','shield'].includes(v.bonus) && typeof v.needsReward==='boolean' && (v.replay===null||idList(v.replay,4));
+  if(!object(v) || (v.format!==undefined && v.format!=='top-two-v1')) return false;
+  const topTwo=v.format==='top-two-v1';
+  const rounds=topTwo?['first','second','third','semi','final']:['first','second','semi','bronze','final'];
+  return text(v.id) && difficulty(v.difficulty) && [...rounds,'complete'].includes(v.round) && list(v.matches,16,m=>match(m,topTwo,v.round==='final')) && list(v.archive,12,s=>object(s)&&rounds.includes(s.round)&&list(s.matches,16,m=>match(m,topTwo,s.round==='final'))) && list(v.eliminated,topTwo?4:2,a=>idList(a,64)) && idList(v.finals,topTwo?4:2) && idList(v.bronze,2) && list(v.podium,4,id=>id===null||ids.has(id)) && points(v.finalWins) && [null,'capacity','speed','shield'].includes(v.bonus) && typeof v.needsReward==='boolean' && (v.replay===null||idList(v.replay,4));
 }
 function snapshot(v: unknown): boolean {
   if (!object(v) || !maps.some(m=>m.id===v.mapId) || !difficulty(v.difficulty) || !list(v.tiles,11,row=>list(row,13,t=>['wall','crate','floor'].includes(t))&&row.length===13) || v.tiles.length!==11 || !num(v.remaining,180) || !num(v.elapsed,1000) || !num(v.coinTimer,10) || !num(v.bombId) || !num(v.rng,4294967295)) return false;
