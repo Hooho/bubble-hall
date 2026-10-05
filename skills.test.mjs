@@ -28,6 +28,18 @@ for (const [remaining, elapsed, expected] of [[180,0,120],[150,30,90],[40,140,0]
   assert.equal(restored.remaining, expected, 'resume preserves elapsed time under the new limit');
 }
 console.log('PASS: two-minute match limit and legacy countdown migration');
+const practice = Object.create(GameEngine.prototype);
+Object.assign(practice,{practice:true,result:null,remaining:119,actors:new Map([['player',{id:'player',alive:true}]]),listeners:new Set(),running:true});
+practice.checkRoundEnd();assert.equal(practice.result,null,'solo trial does not immediately win');
+practice.remaining=0;practice.checkRoundEnd();assert.equal(practice.result,'win');
+practice.result=null;practice.remaining=90;practice.actors.get('player').alive=false;
+practice.checkRoundEnd();assert.equal(practice.result,'lose','trial death ends the round');
+practice.result=null;practice.practice=false;practice.actors.get('player').alive=true;
+practice.checkRoundEnd();assert.equal(practice.result,'win','normal last-survivor win is unchanged');
+console.log('PASS: solo trial continues until timeout or death; normal elimination rule preserved');
+const frameClock=Object.create(GameEngine.prototype);
+Object.assign(frameClock,{running:true,elapsed:0,remaining:120,coinTimer:5,result:null,updateActors(){},updateBombs(){},updateEffects(){},updateMeshes(){}});
+frameClock.update(-0.001);assert.equal(frameClock.remaining,120);assert.equal(frameClock.elapsed,0);
 const fresh = () => ({ active: null, armed: false, shield: false, life: false, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });
 const actor = { id: 'player', alive: true, skills: fresh(), position: { x: 1, y: 1 }, bombCapacity: 1, range: 2, speed: 1 };
 engine.listeners = new Set();

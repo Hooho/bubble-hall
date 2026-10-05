@@ -206,7 +206,10 @@ export class GameEngine {
     return () => this.listeners.delete(listener);
   }
 
-  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3)): void {
+  private practice = false;
+
+  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3), options: { practice?: boolean } = {}): void {
+    this.practice = options.practice ?? false;
     this.mapId = mapId;
     this.opponents = opponents;
     this.difficulty = difficulty;
@@ -333,7 +336,7 @@ export class GameEngine {
   }
 
   public update(delta: number): void {
-    const safeDelta = Math.min(delta, 0.08);
+    const safeDelta = Math.max(0, Math.min(delta, 0.08));
     if (!this.running) {
       this.updateEffects(safeDelta);
       return;
@@ -1304,6 +1307,11 @@ export class GameEngine {
 
   private checkRoundEnd(): void {
     if (this.result) return;
+    if (this.practice) {
+      if (!this.actors.get('player')?.alive) this.finishRound('lose');
+      else if (this.remaining <= 0) this.finishRound('win');
+      return;
+    }
     const survivors = [...this.actors.values()].filter(a => a.alive);
     if (survivors.length === 0) { this.finishRound('draw'); return; }
     if (survivors.length === 1) { this.finishRound(survivors[0].id === 'player' ? 'win' : 'lose'); return; }
