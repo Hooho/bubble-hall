@@ -15,16 +15,20 @@ const descriptions: Record<Reward, { effect: string; use: string }> = {
 };
 
 export function itemGuideMarkup(): string {
+  return `<main class="screen item-guide-screen"><div class="topline"><button class="icon-button" data-action="settings" aria-label="返回设置">←</button><span class="screen-kicker">道具图鉴 / FIELD GUIDE</span><span class="topline-spacer"></span></div>
+    <section class="item-guide-content"><header><p class="eyebrow">KNOW YOUR POWER-UPS</p><h1>认准图标，<em>用对时机。</em></h1><p>全部 10 种道具 · 炸开补给箱有机会获得 · 图标与战场一致</p></header>
+    <aside class="guide-controls"><strong>怎么释放？</strong><p>电脑：E 使用技能，F 替换脚下道具，空格放弹。手机：使用独立技能、替换与放弹按钮。</p><p>主动槽空时自动拾取；已有技能时不会覆盖，需要手动替换。超级炸弹准备中不能替换。</p></aside>
+    ${itemGuideSections()}
+    <aside class="guide-controls"><strong>保护判定顺序</strong><p>无敌 → 护盾 → 额外生命 → 淘汰。没有额外生命时不会复活。一次伤害不会同时消耗护盾和额外生命。</p></aside>
+    <button class="button button-primary" data-action="settings">返回设置</button></section></main>`;
+}
+
+export function itemGuideSections(): string {
   const groups: { title: string; subtitle: string; items: Reward[] }[] = [
     { title: '积分奖励', subtitle: '地图随机刷新 · 拾取即加分', items: ['coin'] },
     { title: '基础成长', subtitle: '拾取即生效 · 不占技能槽', items: ['bomb', 'flame', 'speed'] },
     { title: '被动保护', subtitle: '遇险自动触发 · 不需要操作', items: ['shield', 'life'] },
     { title: '主动技能', subtitle: '一次性使用 · 只有一个携带槽', items: ['invincible', 'super', 'dash', 'rapid'] },
   ];
-  return `<main class="screen item-guide-screen"><div class="topline"><button class="icon-button" data-action="settings" aria-label="返回设置">←</button><span class="screen-kicker">道具图鉴 / FIELD GUIDE</span><span class="topline-spacer"></span></div>
-    <section class="item-guide-content"><header><p class="eyebrow">KNOW YOUR POWER-UPS</p><h1>认准图标，<em>用对时机。</em></h1><p>全部 10 种道具 · 炸开补给箱有机会获得 · 图标与战场一致</p></header>
-    <aside class="guide-controls"><strong>怎么释放？</strong><p>电脑：E 使用技能，F 替换脚下道具，空格放弹。手机：使用独立技能、替换与放弹按钮。</p><p>主动槽空时自动拾取；已有技能时不会覆盖，需要手动替换。超级炸弹准备中不能替换。</p></aside>
-    ${groups.map(group => `<section class="guide-section"><h2>${group.title}</h2><p>${group.subtitle}</p><div class="guide-cards">${group.items.map(kind => `<article class="guide-card"><div class="guide-card-icon">${rewardIcon(kind)}</div><div><h3>${rewardNames[kind]}</h3><p>${descriptions[kind].effect}</p><small>${descriptions[kind].use}</small></div></article>`).join('')}</div></section>`).join('')}
-    <aside class="guide-controls"><strong>保护判定顺序</strong><p>无敌 → 护盾 → 额外生命 → 淘汰。没有额外生命时不会复活。一次伤害不会同时消耗护盾和额外生命。</p></aside>
-    <button class="button button-primary" data-action="settings">返回设置</button></section></main>`;
+  return `${groups.map(group => `<section class="guide-section"><h2>${group.title}</h2><p>${group.subtitle}</p><div class="guide-cards">${group.items.map(kind => `<article class="guide-card"><div class="guide-card-icon">${rewardIcon(kind)}</div><div><h3>${rewardNames[kind]}</h3><p>${descriptions[kind].effect}</p><small>${descriptions[kind].use}</small></div></article>`).join('')}</div></section>`).join('')}`;
 }

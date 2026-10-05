@@ -3,6 +3,8 @@ import './arcade.css';
 import './skills.css';
 import './competition.css';
 import './lobby.css';
+import './gameplay-guide.css';
+import { gameplayGuideMarkup } from './gameplay-guide';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName, playerAvatar } from './roster';
 import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, roundTitle, isTopTwo, advancingIds, replayMembers, tournamentOrder, ranked, type Tournament, type Bonus, type Match } from './tournament';
@@ -30,6 +32,8 @@ let opponents = roster.slice(0, 3);
 let competition: Tournament | null = null;
 let matchMode: 'quick' | 'championship' = 'quick';
 let replaying = false;
+let trial = false;
+let guideBack: 'home' | 'settings' = 'home';
 let career = newCareer();
 let quickId: string = crypto.randomUUID();
 const saveStore = createSaveStore<Save>('bubble-club:save:v1', validateSave);
@@ -43,14 +47,14 @@ let saveError = '';
 let writeQueue = Promise.resolve();
 
 function captureMatch(): void {
-  if(game&&!game.getResult()) {
+  if(!trial&&game&&!game.getResult()) {
     suspended={id:quickId,mode:matchMode,snapshot:game.snapshot()};
     matches[matchMode]=suspended;
   }
 }
 
 function persist(): void {
-  if (saveError) return;
+  if (saveError || trial) return;
   captureMatch();
   const data: Save = structuredClone({ career, tournament: competition, active: suspended, matches, settings });
   writeQueue = writeQueue.then(async () => { if (saveError) return; const e = await saveStore.write(data,saveRevision); saveRevision = e.revision; }).catch(error => {
@@ -100,7 +104,7 @@ function screenMarkup(current: Screen): string {
     case 'tournament': return tournamentMarkup();
     case 'players': return playersMarkup();
     case 'leaderboard': return leaderboardMarkup();
-    case 'howto': return howtoMarkup();
+    case 'howto': return gameplayGuideMarkup(guideBack);
     default: return homeMarkup();
   }
 }
@@ -117,6 +121,7 @@ function homeMarkup(): string {
         <p class="home-subtitle">两分钟积分对战。<br>炸箱 +10，命中 +100；存活到最后或超时争最高分。</p>
       </div>
       <div class="home-actions">
+        <div class="lobby-secondary"><button data-action="trial"><span aria-hidden="true">▷</span> 试玩</button><button data-action="overview"><span aria-hidden="true">▤</span> 玩法一览</button></div>
         <button class="button button-primary mode-entry" data-action="enter-quick"><span><strong>单次对战</strong><small>${matches.quick?'继续上次比赛':'轻松开局 · 两分钟对战'}</small></span><b aria-hidden="true">▶</b></button>
         <button class="button mode-entry championship-entry" data-action="enter-championship"><span><strong>冠军之路</strong><small>${matches.championship || (competition&&competition.round!=='complete')?'继续上次比赛':'64 位选手 · 冲击冠军'}</small></span><b aria-hidden="true">♛</b></button>
       </div>
@@ -199,7 +204,7 @@ function gameMarkup(): string {
   return `
     <main class="screen game-screen">
       <div class="game-topbar">
-        <div class="match-id"><span class="live-dot"></span><span>${mapInfo(selectedMap).name}</span><small>SOLO RUN</small></div>
+        <div class="match-id"><span class="live-dot"></span><span>${trial ? '试玩 · ' : ''}${mapInfo(selectedMap).name}</span><small>${trial ? '试玩 · 不计长期积分' : 'SCORE MATCH'}</small></div>
         <div class="round-clock"><small>ROUND TIME</small><strong id="timer">02:00</strong></div>
         <div class="game-actions"><button class="mini-action" data-action="pause">Ⅱ</button><button class="mini-action desktop-only" data-action="restart">↻</button></div>
       </div>
@@ -220,17 +225,19 @@ function pauseMarkup(): string {
 }
 
 function resultMarkup(): string {
-  const result = game?.getResult() ?? 'draw';
+  if (trial) return page(game?.getResult() === 'win' ? '试玩完成！' : '本次试玩结束', `<div class="competition-card"><h2>${game?.getStandings().find(p=>p.id==='player')?.score ?? 0} 分</h2><p>这是本次试玩的局内得分，不计入长期积分、排行榜和正式战绩。</p><p>正式比赛与冠军赛的续玩进度保持不变。</p></div><div class="page-actions"><button class="button button-primary" data-action="restart">再试一次</button><button class="button" data-action="home">返回大厅</button></div>`);
+  let result = game?.getResult() ?? 'draw';
   const standings = ranked(game?.getStandings() ?? []);
   const copy = result === 'win' ? ['本场获胜！', '成为最后的存活者，或超时以最高分胜出。'] : result === 'lose' ? ['比赛结束', '下次争取更多有效命中。'] : ['本场平局', '存活者最高分并列，或所有选手同归于尽。'];
   if (matchMode === 'championship' && competition && isTopTwo(competition)) {
     const finished = competition.archive.at(-1)?.matches.find(m=>m.members.includes('player'));
     if (replayMembers(competition,pendingPlayerMatch(competition) ?? {id:'',members:[],standings:null,winner:null})) {
-      copy[0]='需要同分加赛'; copy[1]='晋级线或决赛名次同分，返回签表继续加赛。';
+      result='draw'; copy[0]='需要同分加赛'; copy[1]='晋级线或决赛名次同分，返回签表继续加赛。';
     } else if (competition.round === 'complete') {
       copy[0]=competition.podium[0]==='player'?'夺得总冠军！':'总决赛完成'; copy[1]=`本次冠军赛获得第 ${tournamentOrder(competition).indexOf('player')+1} 名。`;
     } else if (finished) {
-      copy[0]=advancingIds(competition,finished).includes('player')?'晋级成功！':'本轮止步';
+      result=advancingIds(competition,finished).includes('player')?'win':'lose';
+      copy[0]=result==='win'?'晋级成功！':'本轮止步';
       copy[1]='每组前两名晋级，存活优先，再按得分排名。';
     }
   }
@@ -246,10 +253,6 @@ function settingsMarkup(): string {
     <button class="setting-row" data-action="howto"><span><strong>玩法说明</strong><small>计分、胜负和操作方式</small></span><b>查看 →</b></button>
     <div class="competition-card"><h3>本地存档 · 进度胶囊</h3><p>${saveError ? '⚠ 存档异常，请先导出备份再刷新。' : `修订 ${saveRevision} · 每 2 秒自动保存比赛`}</p><p>文件和存档码包含相同进度。离线保存在当前浏览器，换设备前请导出备份。</p><div class="save-storage-actions"><button class="button" data-action="export-save">↓ 导出文件</button><button class="button" data-action="export-code">↗ 导出存档码</button><button class="button" data-action="import-save">↑ 导入文件</button><button class="button" data-action="import-code">↙ 导入存档码</button></div><div class="page-actions"><button class="button" data-action="restore-backup">恢复上一份备份</button><button class="button" data-action="reset-progress">清空游戏进度</button></div><p>自动保留上一份备份与最多 5 份历史恢复点；导入前先校验、确认，再保留旧进度。</p></div>`;
   return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">设置 / SETTINGS</span><span class="topline-spacer"></span></div><section class="simple-content"><p class="eyebrow">SYSTEM CHECK</p><h2>让街区<br><em>更顺手。</em></h2><div class="settings-list">${extras}<button class="setting-row" data-action="items"><span><strong>道具图鉴</strong><small>全部 10 种道具 · 效果、释放方式与限制</small></span><b>查看 →</b></button><button class="setting-row" data-action="toggle-sound"><span><strong>声音效果</strong><small>爆炸、拾取和胜负反馈</small></span><b id="sound-label">${soundEnabled ? '开启' : '关闭'}</b></button><div class="setting-row"><span><strong>操作方式</strong><small>键盘 / 触控会自动适配</small></span><b>AUTO</b></div><div class="setting-row"><span><strong>画面风格</strong><small>程序化低多边形 · 原型版</small></span><b>2.5D</b></div></div></section></main>`;
-}
-
-function howtoMarkup(): string {
-  return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">通用比赛规则</span></div><section class="simple-content howto-content"><h2>两分钟，<em>争最高分。</em></h2><div class="rule-grid"><article><h3>炸箱 +10</h3><p>每个被炸毁的箱子计分一次，并可能掉落道具。</p></article><article><h3>命中 +100</h3><p>有效命中对手或击破护盾得分。自爆、命中无敌选手不计分；同一次连锁对同一人只计一次，归属实际伤害炸弹的主人。</p></article><article><h3>按积分判胜</h3><p>每场限时 2 分钟，死亡即淘汰（额外生命道具除外）。只剩一人立即获胜；否则时间结束比较存活者积分，最高分获胜，并列则平局。全部阵亡为平局。</p></article></div><button class="button button-primary" data-action="back">知道了 →</button></section></main>`;
 }
 
 function wireScreen(): void {
@@ -280,10 +283,12 @@ function wireScreen(): void {
 }
 
 function handleAction(action: string): void {
+  const wasTrial = trial;
   audio.unlock();
   if (action !== 'bomb') audio.play('click');
   if (!['bomb', 'skill', 'swap'].includes(action)) { heldDirections.clear(); holdingBomb = false; }
   switch (action) {
+    case 'trial': stopGame(); trial=true; restoring=false; opponents=[]; startNewRound=true; screen='game'; audio.play('start'); render(); window.scrollTo(0,0); break;
     case 'continue-save': if(!suspended)break; if(saveError){alert(saveError);break;} restoring=true; matchMode=suspended.mode; quickId=suspended.id; selectedMap=suspended.snapshot.mapId; difficulty=suspended.snapshot.difficulty; opponents=suspended.snapshot.opponents; screen='game'; render(); break;
     case 'toggle-motion': settings.reducedMotion=!settings.reducedMotion; applyPreferences(); persist(); render(); break;
     case 'export-save': case 'export-code': showSaveTransfer('export'); break;
@@ -316,14 +321,15 @@ function handleAction(action: string): void {
       startQuickMatch(); break;
     case 'play-confirmed': if(screen==='setup'&&confirmNewMatch)startQuickMatch(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
-    case 'home': stopGame(); screen = 'home'; render(); window.scrollTo(0,0);break;
-    case 'howto': screen = 'howto'; render(); break;
+    case 'home': stopGame(); trial=false; screen = 'home'; render(); window.scrollTo(0,0);break;
+    case 'overview': guideBack='home'; screen='howto'; render(); window.scrollTo(0,0); break;
+    case 'howto': guideBack='settings'; screen='howto'; render(); window.scrollTo(0,0); break;
     case 'settings': screen = 'settings'; render(); break;
     case 'items': screen = 'items'; render(); window.scrollTo(0, 0); break;
     case 'back': screen = 'home'; render(); break;
     case 'pause': showPauseOverlay(); break;
     case 'resume': if(saveError){alert(saveError);break;} hidePauseOverlay(); game?.resume(); break;
-    case 'restart': quickId = crypto.randomUUID();
+    case 'restart': if(trial){stopGame();startNewRound=true;screen='game';render();break;} quickId = crypto.randomUUID();
       if (matchMode === 'championship') { stopGame(); screen = 'tournament'; render(); break; }
       hidePauseOverlay();
       if (screen === 'result') {
@@ -343,12 +349,12 @@ function handleAction(action: string): void {
     case 'toggle-sound': soundEnabled = audio.toggle(); render(); break;
     default: break;
   }
-  if (['new-tournament','tournament-play','home','pause','restart','reset-progress'].includes(action)) persist();
+  if (!wasTrial && ['new-tournament','tournament-play','home','pause','restart','reset-progress'].includes(action)) persist();
 }
 
 function startQuickMatch(): void {
   confirmNewMatch=false;
-  stopGame(); suspended=null;matches.quick=null; quickId=crypto.randomUUID(); matchMode='quick';
+  stopGame(); trial=false; suspended=null;matches.quick=null; quickId=crypto.randomUUID(); matchMode='quick';
   opponents=[...roster].sort(()=>Math.random()-0.5).slice(0,3);
   audio.play('start');startNewRound=true;screen='game';render();
   window.scrollTo(0,0);persist();
@@ -387,8 +393,8 @@ function mountGame(): void {
   }
   if(restoring && suspended){game.restore(suspended.snapshot);restoring=false;startNewRound=false;resizeGame();requestAnimationFrame(()=>showPauseOverlay());}
   else if (startNewRound) {
-    game.start(difficulty, selectedMap, opponents);
-    if (matchMode === 'championship' && competition && competition.round !== 'first' && !replaying) {
+    game.start(difficulty, selectedMap, opponents, {practice:trial});
+    if (!trial && matchMode === 'championship' && competition && competition.round !== 'first' && !replaying) {
       if (competition.bonus) game.grantBonus('player', competition.bonus);
       opponents.forEach(p => game?.grantBonus(p.id, p.personality === 'careful' ? 'shield' : p.personality === 'collector' ? 'capacity' : 'speed'));
       competition.bonus = null;
@@ -463,7 +469,7 @@ function updateHud(): void {
   const enemyStats = game.getEnemyStats();
   const enemyStack = document.querySelector<HTMLElement>('#enemy-stack');
   if (enemyStack) {
-    enemyStack.innerHTML = `<div class="card-label">对手 / RIVALS</div>${enemyStats.map((enemy) => `<div class="enemy-row ${enemy.alive ? '' : 'is-out'}"><span class="enemy-dot" style="--enemy:${enemy.color}"></span><span>${enemy.name}</span><small>${enemy.alive ? 'ACTIVE' : 'OUT'}</small></div>`).join('')}`;
+    enemyStack.innerHTML = trial ? `<div class="card-label">自由试玩</div><p>练习放弹、拾取与技能。<br>不计长期积分。</p>` : `<div class="card-label">对手 / RIVALS</div>${enemyStats.map((enemy) => `<div class="enemy-row ${enemy.alive ? '' : 'is-out'}"><span class="enemy-dot" style="--enemy:${enemy.color}"></span><span>${enemy.name}</span><small>${enemy.alive ? 'ACTIVE' : 'OUT'}</small></div>`).join('')}`;
   }
   const aliveCount = document.querySelector<HTMLElement>('#alive-count');
   if (aliveCount) aliveCount.textContent = game.getStandings().map(a => `${a.name} ${a.score}`).join(' · ');
@@ -485,8 +491,8 @@ function handleGameEvent(event: GameEvent): void {
     if (event.actorId === 'player') showToast(event.item === 'coin' ? '拾取金币 +5 分' : `获得 ${rewardNames[event.item]}`);
   }
   if (event.type === 'round-over') {
-    if (matchMode === 'quick' && game) settleQuick(career, quickId, difficulty, game.getStandings());
-    if (matchMode === 'championship' && competition && game) {
+    if (!trial && matchMode === 'quick' && game) settleQuick(career, quickId, difficulty, game.getStandings());
+    if (!trial && matchMode === 'championship' && competition && game) {
       const match = pendingPlayerMatch(competition);
       if (match && submitMatch(competition, match, game.getStandings())) {
         for (const m of competition.matches) if (!m.standings) submitMatch(competition, m, simulate(m.members));
@@ -494,7 +500,7 @@ function handleGameEvent(event: GameEvent): void {
         settleTournament(career,competition);
       }
     }
-    suspended=null; matches[matchMode]=null;persist();
+    if(!trial){suspended=null; matches[matchMode]=null;persist();}
     heldDirections.clear();
     audio.play(event.result === 'win' ? 'win' : 'lose');
     clearTimeout(resultTimer);
