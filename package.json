@@ -9,7 +9,8 @@
     "prebuild": "npm run prepare:players",
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "node skills.test.mjs && node competition.test.mjs && node storage.test.mjs",
+    "test": "node skills.test.mjs && node competition.test.mjs && node storage.test.mjs && node nuwa-model.test.mjs",
+    "build:nuwa": "node scripts/build-nuwa-glb.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

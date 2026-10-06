@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { attachNuwa, faceCharacter } from './character-art';
+import { attachNuwa, faceCharacter, releaseCharacter } from './character-art';
 import { mapInfo, type MapId } from './maps';
 import { roster, type Contestant } from './roster';
 import type { Bonus } from './tournament';
@@ -441,6 +441,7 @@ export class GameEngine {
   }
 
   private disposeObject(object: THREE.Object3D): void {
+    releaseCharacter(object);
     object.traverse((child) => {
       const disposable = child as THREE.Mesh & { material?: THREE.Material | THREE.Material[] };
       if (!(child instanceof THREE.Sprite)) disposable.geometry?.dispose();
