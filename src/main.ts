@@ -118,7 +118,6 @@ function homeMarkup(): string {
       <div class="hero-stage" aria-hidden="true"><div class="stage-orbit"></div><div class="toy-character"><i class="toy-antenna"></i><div class="toy-head"><div class="toy-face"><i></i><i></i></div></div><div class="toy-body"><span>✦</span></div><i class="toy-hand left"></i><i class="toy-hand right"></i><i class="toy-foot left"></i><i class="toy-foot right"></i></div><div class="hero-bubble bubble-a"></div><div class="hero-bubble bubble-b"></div><div class="hero-bubble bubble-c"></div><span class="stage-label">蓝蓝 / BUBBLE EXPLORER</span></div>
       <div class="home-orbit orbit-one"></div><div class="home-orbit orbit-two"></div>
       <div class="home-copy">
-        <p class="eyebrow">READY, SET, POP!</p>
         <h1 class="arc-title" aria-label="快跑！有炸弹！"><span class="arc-title-line" aria-hidden="true"><i>快</i><i>跑</i><i>！</i></span><span class="arc-title-line" aria-hidden="true"><i>有</i><i>炸</i><i>弹</i><i>！</i></span></h1>
         <p class="home-subtitle">两分钟积分对战。<br>炸箱 +10，命中 +100；存活到最后或超时争最高分。</p>
       </div>
