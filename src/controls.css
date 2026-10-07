@@ -33,9 +33,9 @@
 @media(prefers-reduced-motion:reduce){.game-screen .bomb-button.is-fired::after{animation:none}.game-screen .dpad button{transition:none}}
 
 /* Glossy arcade keycaps; layout below owns all touch-screen sizing. */
-.game-screen .dpad{height:calc(var(--key)*3 + 8px)}
+.game-screen .dpad{height:calc(var(--key)*2 + 4px)}
 .game-screen .dpad button{border:2px solid #d5f5ff;border-radius:32%;background:linear-gradient(155deg,#8fe5ff 0%,#45b5ff 24%,#2788f2 65%,#1761cf 100%);color:white;text-shadow:0 2px 1px #1463bd;font-size:22px;box-shadow:inset 0 2px 1px #ffffffd9,inset 0 -3px 2px #125ecc80,0 0 0 1px #7abce9,0 4px 0 #a5cdea,0 6px 10px #307cba26}
-.game-screen .dpad button:nth-child(3){top:calc(var(--key)*2 + 8px)}
+.game-screen .dpad button:nth-child(3){top:calc(var(--key) + 4px)}
 .game-screen .bomb-button{gap:0;align-content:center;background:radial-gradient(ellipse at 30% 15%,#8eeeff,#30b6fa 35%,#1687eb 68%,#1164d4);border:3px solid #eaffff;box-shadow:inset 0 3px 2px #fff9,inset 0 -5px 4px #075fc7,0 0 0 2px #83c5f0,0 5px 0 #9fc9e6,0 9px 18px #146cba30}
 .game-screen .bomb-button svg{width:38px;height:38px;filter:drop-shadow(0 2px 1px #0b69c8)}
 .game-screen .bomb-button small{font-size:13px;font-weight:800;letter-spacing:0}
