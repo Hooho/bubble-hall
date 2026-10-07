@@ -1,0 +1,32 @@
+/* Settings owns its layout: no inherited hero-sized padding. */
+.settings-screen .topline{max-width:1160px;margin:0 auto;padding:18px 28px;gap:14px}
+.settings-screen .screen-kicker{letter-spacing:.08em}
+.settings-layout{display:grid;grid-template-columns:minmax(190px, .7fr) minmax(0,1.8fr);gap:36px;max-width:1104px;margin:0 auto;padding:12px 28px 40px;align-items:start}
+.settings-heading{position:sticky;top:24px;padding-top:12px}
+.settings-heading h2{margin:0;font-size:clamp(34px,4vw,52px);font-weight:950;line-height:1.2;letter-spacing:-2px;color:#173957}
+.settings-heading em{display:block;color:#208afa;font-style:normal}
+.settings-screen .settings-list{max-width:none;min-width:0;margin:0;display:grid;gap:8px}
+.settings-screen .competition-card{padding:16px;border-radius:18px;box-shadow:0 3px 0 #dceaf4}
+.settings-screen .competition-card h3{margin:0 0 8px;font-size:17px}
+.settings-screen .competition-card p{margin:6px 0 12px;font-size:12px;line-height:1.6;color:#617f99}
+.settings-screen .competition-card p:last-child{margin-bottom:0}
+.settings-screen .setting-row{min-height:62px;margin:0;padding:10px 14px;gap:12px;background:#ffffff8c}
+.settings-screen .setting-row>span{min-width:0}.settings-screen .setting-row>b{flex-shrink:0;letter-spacing:0}
+.settings-screen .setting-row select{min-height:40px;padding:7px 10px}
+.settings-screen .cosmetic-grid{gap:8px;margin-top:12px}
+.settings-screen .cosmetic-option{min-width:0;padding:12px 5px;gap:7px}
+.settings-screen .cosmetic-option strong{font-size:13px}.settings-screen .cosmetic-option small{font-size:10px;line-height:1.3}
+.settings-screen .suit-preview{width:34px;height:44px}.settings-screen .suit-preview i:after{font-size:16px;letter-spacing:3px;left:3px;top:-5px}
+.settings-screen .page-actions{position:static;margin:10px 0;gap:8px;flex-direction:row;flex-wrap:wrap}
+.settings-screen .button{min-height:42px;padding:8px 12px;font-size:12px}
+@media(max-width:700px){
+ .settings-screen .topline{padding:12px 16px;gap:12px}.settings-screen .topline .icon-button{width:40px;height:40px;font-size:24px}
+ .settings-layout{display:block;padding:6px 16px 28px}
+ .settings-heading{position:static;padding:0;margin:4px 0 18px}
+ .settings-heading h2{font-size:clamp(25px,6vw,34px);letter-spacing:-1px;white-space:nowrap}
+ .settings-heading em{display:inline}
+ .settings-screen .competition-card{padding:13px}
+ .settings-screen .setting-row{min-height:58px;padding:10px 12px}
+ .settings-screen .setting-row strong{font-size:13px}.settings-screen .setting-row small{font-size:10px}
+ .settings-screen .page-actions>.button{flex:1}
+}

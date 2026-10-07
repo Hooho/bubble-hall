@@ -5,6 +5,7 @@ import './competition.css';
 import './lobby.css';
 import './gameplay-guide.css';
 import './controls.css';
+import './settings.css';
 import { gameplayGuideMarkup } from './gameplay-guide';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName, playerAvatar } from './roster';
@@ -250,7 +251,7 @@ function settingsMarkup(): string {
     <button class="setting-row" data-action="players"><span><strong>选手图鉴</strong><small>63 位选手 · 头像、性格与能力</small></span><b>查看 →</b></button>
     <button class="setting-row" data-action="howto"><span><strong>玩法说明</strong><small>计分、胜负和操作方式</small></span><b>查看 →</b></button>
     <div class="competition-card"><h3>本地存档 · 进度胶囊</h3><p>${saveError ? '⚠ 存档异常，请先导出备份再刷新。' : `修订 ${saveRevision} · 每 2 秒自动保存比赛`}</p><p>文件和存档码包含相同进度。离线保存在当前浏览器，换设备前请导出备份。</p><div class="save-storage-actions"><button class="button" data-action="export-save">↓ 导出文件</button><button class="button" data-action="export-code">↗ 导出存档码</button><button class="button" data-action="import-save">↑ 导入文件</button><button class="button" data-action="import-code">↙ 导入存档码</button></div><div class="page-actions"><button class="button" data-action="restore-backup">恢复上一份备份</button><button class="button" data-action="reset-progress">清空游戏进度</button></div><p>自动保留上一份备份与最多 5 份历史恢复点；导入前先校验、确认，再保留旧进度。</p></div>`;
-  return `<main class="screen simple-screen"><div class="topline"><button class="icon-button" data-action="back">←</button><span class="screen-kicker">设置 / SETTINGS</span><span class="topline-spacer"></span></div><section class="simple-content"><p class="eyebrow">SYSTEM CHECK</p><h2>让街区<br><em>更顺手。</em></h2><div class="settings-list">${extras}<button class="setting-row" data-action="items"><span><strong>道具图鉴</strong><small>全部 10 种道具 · 效果、释放方式与限制</small></span><b>查看 →</b></button><button class="setting-row" data-action="toggle-sound"><span><strong>声音效果</strong><small>爆炸、拾取和胜负反馈</small></span><b id="sound-label">${soundEnabled ? '开启' : '关闭'}</b></button><div class="setting-row"><span><strong>操作方式</strong><small>键盘 / 触控会自动适配</small></span><b>AUTO</b></div><div class="setting-row"><span><strong>画面风格</strong><small>程序化低多边形 · 原型版</small></span><b>2.5D</b></div></div></section></main>`;
+  return `<main class="screen settings-screen"><div class="topline"><button class="icon-button" data-action="back" aria-label="返回大厅">←</button><span class="screen-kicker">设置</span></div><section class="settings-layout"><header class="settings-heading"><h2>让街区<em>更顺手。</em></h2></header><div class="settings-list">${extras}<button class="setting-row" data-action="items"><span><strong>道具图鉴</strong><small>全部 10 种道具 · 效果、释放方式与限制</small></span><b>查看 →</b></button><button class="setting-row" data-action="toggle-sound"><span><strong>声音效果</strong><small>爆炸、拾取和胜负反馈</small></span><b id="sound-label">${soundEnabled ? '开启' : '关闭'}</b></button><div class="setting-row"><span><strong>画面风格</strong><small>程序化低多边形 · 原型版</small></span><b>立体街区</b></div></div></section></main>`;
 }
 
 function wireScreen(): void {
