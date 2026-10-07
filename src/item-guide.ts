@@ -23,12 +23,16 @@ export function itemGuideMarkup(): string {
     <button class="button button-primary" data-action="settings">返回设置</button></section></main>`;
 }
 
-export function itemGuideSections(): string {
+export function itemGuideSections(compact = false): string {
+  const quick: Record<Reward,string> = {
+    coin:'本场积分 +5。', bomb:'容量 +1，最多 5 颗。', flame:'四向范围 +1，最多 5 格。', speed:'基础移速 +10%，最多 130%。',
+    shield:'自动挡住一次爆炸。', life:'额外复活一次，最多储备 1 条。', invincible:'主动无敌 3 秒。', super:'下一颗范围 +2，每方向穿透一个箱子。', dash:'疾跑 5 秒，移速 +40%（总上限 170%）。', rapid:'连发 4 秒，按住放弹，间隔 0.12 秒。',
+  };
   const groups: { title: string; subtitle: string; items: Reward[] }[] = [
     { title: '积分奖励', subtitle: '地图随机刷新 · 拾取即加分', items: ['coin'] },
     { title: '基础成长', subtitle: '拾取即生效 · 不占技能槽', items: ['bomb', 'flame', 'speed'] },
     { title: '被动保护', subtitle: '遇险自动触发 · 不需要操作', items: ['shield', 'life'] },
     { title: '主动技能', subtitle: '一次性使用 · 只有一个携带槽', items: ['invincible', 'super', 'dash', 'rapid'] },
   ];
-  return `${groups.map(group => `<section class="guide-section"><h2>${group.title}</h2><p>${group.subtitle}</p><div class="guide-cards">${group.items.map(kind => `<article class="guide-card"><div class="guide-card-icon">${rewardIcon(kind)}</div><div><h3>${rewardNames[kind]}</h3><p>${descriptions[kind].effect}</p><small>${descriptions[kind].use}</small></div></article>`).join('')}</div></section>`).join('')}`;
+  return `${groups.map(group => `<section class="guide-section"><h2>${group.title}</h2><p>${group.subtitle}</p><div class="guide-cards">${group.items.map(kind => `<article class="guide-card"><div class="guide-card-icon">${rewardIcon(kind)}</div><div><h3>${rewardNames[kind]}</h3><p>${compact ? quick[kind] : descriptions[kind].effect}</p>${compact ? `<details><summary>使用细节</summary><small>${descriptions[kind].use}</small></details>` : `<small>${descriptions[kind].use}</small>`}</div></article>`).join('')}</div></section>`).join('')}`;
 }
