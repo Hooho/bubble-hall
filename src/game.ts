@@ -272,12 +272,13 @@ export class GameEngine {
     return Math.ceil(this.remaining);
   }
 
-  public getPlayerStats(): { bombs: number; maxBombs: number; range: number; alive: boolean } {
+  public getPlayerStats(): { bombs: number; maxBombs: number; range: number; speed: number; alive: boolean } {
     const player = this.actors.get('player');
     return {
       bombs: player?.bombsActive ?? 0,
       maxBombs: player?.bombCapacity ?? 1,
       range: player?.range ?? 2,
+      speed: player?.speed ?? 1,
       alive: player?.alive ?? false,
     };
   }

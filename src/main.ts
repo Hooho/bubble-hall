@@ -210,7 +210,7 @@ function gameMarkup(): string {
       </div>
       <div class="game-layout">
         <aside id="match-scores" class="match-scores" aria-label="本局所有选手比分"></aside>
-        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas></section>
+        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas><div class="base-attributes" aria-label="玩家基础属性"><div title="本局炸弹总容量，爆炸后释放名额">${rewardIcon('bomb')}<span>容量 <b id="base-capacity">1</b><small id="base-available">可放 1</small></span></div><div title="普通炸弹向四个方向延伸的格数">${rewardIcon('flame')}<span>范围 <b id="base-range">2 格</b></span></div><div title="基础移动速度，不含临时疾跑加成">${rewardIcon('speed')}<span>移速 <b id="base-speed">100%</b></span></div></div></section>
       </div>
       <div class="desktop-controls"><span>方向键 / WASD 移动</span><b>SPACE</b><span>放置炸弹</span></div>
       <div class="mobile-controls"><div class="dpad"><button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="down">▼</button><button data-dir="right">▶</button></div><button class="bomb-button" data-action="bomb" aria-label="放置炸弹"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 13l5-6 5 3-2 5M34 5l2-3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M27 12l9 7-5 6-9-7z" fill="currentColor"/><circle cx="22" cy="29" r="15" fill="currentColor"/><path d="M13 26q1-7 8-7" fill="none" stroke="#83dfff" stroke-width="3" stroke-linecap="round"/></svg><small>炸弹</small></button></div>
@@ -467,6 +467,11 @@ function updateHud(): void {
     if (swapButton.innerHTML !== markup) swapButton.innerHTML = markup;
   }
   const timer = document.querySelector<HTMLElement>('#timer');
+  const base = game.getPlayerStats();
+  for (const [id, value] of Object.entries({ 'base-capacity':String(base.maxBombs), 'base-available':`可放 ${Math.max(0,base.maxBombs-base.bombs)}`, 'base-range':`${base.range} 格`, 'base-speed':`${Math.round(base.speed*100)}%` })) {
+    const element = app.querySelector<HTMLElement>(`#${id}`);
+    if (element && element.textContent !== value) element.textContent = value;
+  }
   if (timer) {
     const seconds = game.getRemainingTime();
     timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
