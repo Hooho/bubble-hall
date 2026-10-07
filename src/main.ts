@@ -200,8 +200,6 @@ function progressTournament(): void {
 }
 
 function gameMarkup(): string {
-  const stats = game?.getPlayerStats() ?? { bombs: 0, maxBombs: 1, range: 2, alive: true };
-  const enemies = game?.getEnemyStats() ?? [];
   return `
     <main class="screen game-screen">
       <div class="game-topbar">
@@ -210,9 +208,8 @@ function gameMarkup(): string {
         <div class="game-actions"><button class="mini-action" data-action="pause">Ⅱ</button><button class="mini-action desktop-only" data-action="restart">↻</button></div>
       </div>
       <div class="game-layout">
-        <aside class="player-card hud-card"><div class="avatar avatar-player">YOU</div><div><span class="card-label">你</span><strong id="player-status">准备中</strong></div><div class="player-stats"><span><i>●</i><b id="bomb-count">${stats.maxBombs - stats.bombs}</b></span><span><i class="flame-icon">✦</i><b id="range-count">${stats.range}</b></span></div></aside>
-        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas><div class="board-caption"><span id="alive-count">剩余玩家 04</span><span>SAFE ZONE · ON</span></div></section>
-        <aside id="enemy-stack" class="enemy-stack hud-card"><div class="card-label">对手 / RIVALS</div>${enemies.map((enemy) => `<div class="enemy-row ${enemy.alive ? '' : 'is-out'}"><span class="enemy-dot" style="--enemy:${enemy.color}"></span><span>${enemy.name}</span><small>${enemy.alive ? 'ACTIVE' : 'OUT'}</small></div>`).join('')}</aside>
+        <aside id="match-scores" class="match-scores" aria-label="本局所有选手比分"></aside>
+        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas></section>
       </div>
       <div class="desktop-controls"><span>方向键 / WASD 移动</span><b>SPACE</b><span>放置炸弹</span></div>
       <div class="mobile-controls"><div class="dpad"><button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="down">▼</button><button data-dir="right">▶</button></div><button class="bomb-button" data-action="bomb" aria-label="放置炸弹"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 13l5-6 5 3-2 5M34 5l2-3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M27 12l9 7-5 6-9-7z" fill="currentColor"/><circle cx="22" cy="29" r="15" fill="currentColor"/><path d="M13 26q1-7 8-7" fill="none" stroke="#83dfff" stroke-width="3" stroke-linecap="round"/></svg><small>炸弹</small></button></div>
@@ -469,24 +466,29 @@ function updateHud(): void {
     if (swapButton.innerHTML !== markup) swapButton.innerHTML = markup;
   }
   const timer = document.querySelector<HTMLElement>('#timer');
-  const stats = game.getPlayerStats();
-  const bombCount = document.querySelector<HTMLElement>('#bomb-count');
-  const rangeCount = document.querySelector<HTMLElement>('#range-count');
   if (timer) {
     const seconds = game.getRemainingTime();
     timer.textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   }
-  if (bombCount) bombCount.textContent = String(stats.maxBombs - stats.bombs);
-  if (rangeCount) rangeCount.textContent = String(stats.range);
-  const enemyStats = game.getEnemyStats();
-  const enemyStack = document.querySelector<HTMLElement>('#enemy-stack');
-  if (enemyStack) {
-    enemyStack.innerHTML = trial ? `<div class="card-label">自由试玩</div><p>练习放弹、拾取与技能。<br>不计长期积分。</p>` : `<div class="card-label">对手 / RIVALS</div>${enemyStats.map((enemy) => `<div class="enemy-row ${enemy.alive ? '' : 'is-out'}"><span class="enemy-dot" style="--enemy:${enemy.color}"></span><span>${enemy.name}</span><small>${enemy.alive ? 'ACTIVE' : 'OUT'}</small></div>`).join('')}`;
+  const scoreboard = app.querySelector<HTMLElement>('#match-scores');
+  if (scoreboard) {
+    const standings = game.getStandings();
+    for (const actor of standings) {
+      let card = Array.from(scoreboard.children).find(node => (node as HTMLElement).dataset.actor === actor.id) as HTMLElement | undefined;
+      if (!card) {
+        card = document.createElement('div');
+        card.dataset.actor = actor.id;
+        card.className = 'match-score';
+        card.append(document.createElement('span'), document.createElement('strong'));
+        scoreboard.append(card);
+      }
+      card.classList.toggle('is-out', !actor.alive);
+      card.classList.toggle('is-you', actor.id === 'player');
+      card.children[0].textContent = actor.name;
+      card.children[1].textContent = String(actor.score);
+      card.title = `${actor.name}：${actor.score} 分${actor.alive ? '' : ' · 已淘汰'}`;
+    }
   }
-  const aliveCount = document.querySelector<HTMLElement>('#alive-count');
-  if (aliveCount) aliveCount.textContent = game.getStandings().map(a => `${a.name} ${a.score}`).join(' · ');
-  const playerStatus = document.querySelector<HTMLElement>('#player-status');
-  if (playerStatus) playerStatus.textContent = `${stats.alive ? '' : '已淘汰 · '}${game.getStandings().find(a => a.id === 'player')?.score ?? 0} 分${skills.respawning ? ' · 复活中' : ''}`;
   const toast = document.querySelector<HTMLElement>('#toast');
   if (toast && toastTimer > 0) {
     toastTimer -= 1 / 60;

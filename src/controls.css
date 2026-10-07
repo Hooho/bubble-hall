@@ -122,3 +122,20 @@
 @media (orientation:portrait) and (max-height:700px){
   .game-screen{--control-key:clamp(54px,17vw,64px);--action-key:54px;--bomb-size:94px;--control-lift:10px}
 }
+
+/* A single in-flow scoreboard replaces the overlapping personal/rival HUD. */
+.game-screen .game-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:42px minmax(0,1fr)}
+.game-screen .match-scores{grid-row:1;grid-column:1;display:flex;gap:6px;width:min(100%,640px);margin:0 auto;align-self:center;min-width:0}
+.match-score{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:4px;padding:8px 10px;border:1px solid #d7e8f5;border-radius:12px;background:#ffffffed;color:#315576;font-size:11px}
+.match-score span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.match-score strong{font-size:15px;font-variant-numeric:tabular-nums}.match-score.is-you{border-color:#74baf4;color:#1468b6}.match-score.is-out{color:#8795a2;background:#e7eef3}.match-score.is-out span{text-decoration:line-through}
+.game-screen .board-wrap{grid-row:2;grid-column:1}
+@media(max-width:380px){.match-score{padding:6px 5px;font-size:9px;flex-direction:column;gap:1px}.match-score span{max-width:100%}.match-score strong{font-size:13px}}
+@media(orientation:portrait) and (max-width:900px),(orientation:portrait) and (pointer:coarse){
+  /* Split surplus space 65/35 above/below, without shifting out of the board row. */
+  .game-screen .board-wrap{align-self:start;margin-top:0;position:relative;top:65%;transform:translateY(-65%)}
+}
+@media(max-height:540px) and (orientation:landscape){
+  .game-screen .game-layout{display:grid;grid-template-rows:32px minmax(0,1fr);gap:4px}
+  .game-screen .match-scores{height:30px}.match-score{padding:3px 5px;font-size:9px}
+  .game-screen .board-wrap{width:min(100%,calc((100dvh - 108px)*1.3))}
+}
