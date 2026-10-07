@@ -215,7 +215,7 @@ function gameMarkup(): string {
         <aside id="enemy-stack" class="enemy-stack hud-card"><div class="card-label">对手 / RIVALS</div>${enemies.map((enemy) => `<div class="enemy-row ${enemy.alive ? '' : 'is-out'}"><span class="enemy-dot" style="--enemy:${enemy.color}"></span><span>${enemy.name}</span><small>${enemy.alive ? 'ACTIVE' : 'OUT'}</small></div>`).join('')}</aside>
       </div>
       <div class="desktop-controls"><span>方向键 / WASD 移动</span><b>SPACE</b><span>放置炸弹</span></div>
-      <div class="mobile-controls"><div class="dpad"><button data-dir="up">↑</button><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div><button class="bomb-button" data-action="bomb"><span>✦</span><small>BOMB</small></button></div>
+      <div class="mobile-controls"><div class="dpad"><button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="down">▼</button><button data-dir="right">▶</button></div><button class="bomb-button" data-action="bomb" aria-label="放置炸弹"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 13l5-6 5 3-2 5M34 5l2-3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M27 12l9 7-5 6-9-7z" fill="currentColor"/><circle cx="22" cy="29" r="15" fill="currentColor"/><path d="M13 26q1-7 8-7" fill="none" stroke="#83dfff" stroke-width="3" stroke-linecap="round"/></svg><small>炸弹</small></button></div>
       <div class="skill-dock"><div id="passive-status"></div><button id="skill-button" data-action="skill">空技能槽</button><button id="swap-button" data-action="swap" hidden></button></div>
       <div id="toast" class="game-toast" aria-live="polite"></div>
     </main>`;
@@ -453,14 +453,21 @@ function updateHud(): void {
   const skillButton = app.querySelector<HTMLButtonElement>('#skill-button');
   if (skillButton) {
     skillButton.disabled = !skills.active || skills.respawning || !game.getPlayerStats().alive;
-    const skillMarkup = skills.active ? `${rewardIcon(skills.active)}<span>${skills.armed ? '已准备 · 放弹释放 / E 取消' : `${rewardNames[skills.active]} · E`}</span>` : 'E 释放技能 · 空技能槽';
+    skillButton.title = skills.active ? `${rewardNames[skills.active]}：E 释放；已准备时再次按 E 取消` : '空技能槽：炸箱拾取技能';
+    const skillMarkup = `${skills.active ? rewardIcon(skills.active) : '<span class="empty-skill-icon" aria-hidden="true">◇</span>'}<span>${skills.armed ? '已准备' : skills.active ? rewardNames[skills.active] : '技能'}</span><kbd>E</kbd>`;
     if (skillButton.innerHTML !== skillMarkup) skillButton.innerHTML = skillMarkup;
     skillButton.classList.toggle('armed', skills.armed);
   }
   const passives = app.querySelector('#passive-status');
   if (passives) passives.textContent = [skills.shield ? '◈ 护盾' : '', skills.life ? '♥ 复活 ×1' : '', skills.invincible > 0 ? `无敌 ${skills.invincible.toFixed(1)}s` : '', skills.dash > 0 ? `疾跑 ${skills.dash.toFixed(1)}s` : '', skills.rapid > 0 ? `连发 ${skills.rapid.toFixed(1)}s` : '', skills.respawning ? '等待安全复活' : ''].filter(Boolean).join(' · ');
   const swapButton = app.querySelector<HTMLButtonElement>('#swap-button');
-  if (swapButton) { swapButton.hidden = false; swapButton.disabled = !skills.swap || !game.getPlayerStats().alive; swapButton.textContent = skills.swap ? `F 替换为 ${skills.swap}` : 'F 替换技能 · 需站在道具上'; }
+  if (swapButton) {
+    swapButton.hidden = false;
+    swapButton.disabled = !skills.swap || !game.getPlayerStats().alive;
+    swapButton.title = skills.swap ? `F 替换为 ${skills.swap}` : '站在技能道具上，按 F 替换';
+    const markup = '<span class="swap-skill-icon" aria-hidden="true">⇄</span><span>替换</span><kbd>F</kbd>';
+    if (swapButton.innerHTML !== markup) swapButton.innerHTML = markup;
+  }
   const timer = document.querySelector<HTMLElement>('#timer');
   const stats = game.getPlayerStats();
   const bombCount = document.querySelector<HTMLElement>('#bomb-count');
