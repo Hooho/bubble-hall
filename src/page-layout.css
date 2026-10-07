@@ -37,3 +37,51 @@
  .leaderboard-list .score-row .portrait{width:30px;height:30px}
  .leaderboard-rules summary span{display:block;margin-left:0;font-size:11px}
 }
+
+/* Compact playbook: small illustrated headers instead of large art stages. */
+.screen.gameplay-guide{--page-width:980px}
+.screen.gameplay-guide .playbook-intro h1{font-size:clamp(23px,3vw,34px);margin:0 0 10px}
+.screen.gameplay-guide .playbook-intro>p{margin:0;font-size:13px;max-width:none}
+.screen.gameplay-guide .playbook-nav{margin:16px 0 20px;padding:4px;border-radius:12px;gap:4px;box-shadow:0 3px 10px #246fa009}
+.screen.gameplay-guide .playbook-nav a{font-size:12px;padding:11px 4px;border-radius:8px}
+.screen.gameplay-guide .playbook-section,.screen.gameplay-guide .guide-section{margin:20px 0}
+.screen.gameplay-guide .playbook-section>h2{font-size:20px;margin:0 0 12px;gap:8px}
+.screen.gameplay-guide .playbook-section>h2>span{font-size:10px;border-radius:7px;padding:6px}
+.screen.gameplay-guide :is(.field-cards,.match-guide-cards,.guide-cards){gap:12px;align-items:start}
+.screen.gameplay-guide :is(.field-card,.match-guide-cards>article,.guide-card){padding:14px 16px;border:1px solid #d4e6f3;border-radius:14px;box-shadow:0 2px 0 #deebf4}
+.screen.gameplay-guide .field-card{display:grid;grid-template-columns:46px minmax(0,1fr);column-gap:10px;row-gap:0}
+.screen.gameplay-guide .field-art{width:46px;height:48px;grid-column:1;grid-row:1;background:#edf7ff;border-radius:11px;overflow:hidden}
+.screen.gameplay-guide .field-art>i,.screen.gameplay-guide .field-art>.guide-danger{flex-shrink:0;scale:.49}
+.screen.gameplay-guide .skill-example .reward-icon{width:36px;height:36px}
+.screen.gameplay-guide .skill-example b{font-size:8px;left:auto;right:1px;bottom:1px;padding:0 3px;border-width:1px;border-radius:4px}
+.screen.gameplay-guide .field-card h3{grid-column:2;grid-row:1;align-self:center;font-size:16px;margin:0;line-height:1.4}
+.screen.gameplay-guide .field-card h3 small{display:block;font-size:11px;margin:2px 0 0}
+.screen.gameplay-guide .field-card p{grid-column:1/-1;margin:8px 0 0;font-size:13px;line-height:1.65}
+.screen.gameplay-guide .score-examples{gap:10px}
+.screen.gameplay-guide .score-examples article{min-height:86px;border-radius:12px;padding:12px 6px}
+.screen.gameplay-guide .score-examples b{font-size:27px;line-height:1.1}
+.screen.gameplay-guide .score-examples strong{font-size:12px;margin-top:6px}
+.screen.gameplay-guide .score-examples .reward-icon{width:18px;height:18px;right:6px;top:6px}
+.screen.gameplay-guide .match-guide-cards h3{font-size:17px;margin:6px 0}
+.screen.gameplay-guide .match-guide-cards p{font-size:13px;margin:6px 0;line-height:1.65}
+.screen.gameplay-guide .tournament-route{font-size:16px}
+.screen.gameplay-guide .guide-controls,.screen.gameplay-guide .guide-longterm{margin:12px 0;padding:12px 14px;border-radius:12px;font-size:12px}
+.screen.gameplay-guide .guide-controls p,.screen.gameplay-guide .guide-longterm p{font-size:12px;line-height:1.65;margin:6px 0}
+.screen.gameplay-guide .guide-section>h2{font-size:18px;margin:0 0 6px}
+.screen.gameplay-guide .guide-section>p{font-size:12px;margin:0 0 10px}
+.screen.gameplay-guide .guide-card{gap:10px}
+.screen.gameplay-guide .guide-card-icon{padding:6px;border-radius:10px}
+.screen.gameplay-guide .guide-card .reward-icon{width:30px;height:30px}
+.screen.gameplay-guide .guide-card h3{font-size:15px;margin:0 0 6px}
+.screen.gameplay-guide .guide-card p{font-size:13px;line-height:1.6;margin:0 0 6px}
+.screen.gameplay-guide .guide-card small{font-size:11px;line-height:1.6}
+.screen.gameplay-guide .playbook-section>p{font-size:13px;line-height:1.65;margin:10px 0}
+@media(max-width:700px){
+ .screen.gameplay-guide :is(.field-card,.match-guide-cards>article,.guide-card){padding:12px;border-radius:12px}
+ .screen.gameplay-guide :is(.field-cards,.match-guide-cards,.guide-cards){gap:10px}
+ .screen.gameplay-guide .playbook-intro h1{font-size:clamp(20px,5.1vw,28px)}
+ .screen.gameplay-guide .playbook-nav a{font-size:11px}
+ .screen.gameplay-guide .score-examples{gap:6px}
+ .screen.gameplay-guide .score-examples article{min-height:80px}
+ .screen.gameplay-guide .score-examples strong{font-size:10px}
+}
