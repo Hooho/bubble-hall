@@ -1,0 +1,33 @@
+/* Arcade controls: tactile directions, a distinct explosive action, persistent skill slots. */
+.game-screen .dpad{--key:clamp(54px,15vw,68px);position:relative;width:calc(var(--key)*3 + 8px);height:calc(var(--key)*2 + 4px);transform:none;pointer-events:auto}
+.game-screen .dpad button{position:absolute;display:grid;place-items:center;width:var(--key);height:var(--key);border:2px solid white;border-radius:18px;background:#f7fcff;color:#2771b9;font-size:30px;box-shadow:0 6px 0 #94b9d7;touch-action:none;user-select:none;transition:transform 80ms,background 80ms,box-shadow 80ms}
+.game-screen .dpad button:nth-child(1){left:calc(var(--key) + 4px);top:0}
+.game-screen .dpad button:nth-child(2){left:0;top:calc(var(--key) + 4px)}
+.game-screen .dpad button:nth-child(3){left:calc(var(--key) + 4px);top:calc(var(--key) + 4px)}
+.game-screen .dpad button:nth-child(4){left:calc(var(--key)*2 + 8px);right:auto;top:calc(var(--key) + 4px)}
+.game-screen .dpad button.is-pressed,.game-screen .dpad button:active{background:#258bec;color:white;transform:translateY(4px);box-shadow:0 2px 0 #155baa,inset 0 2px 8px #1057a350}
+.game-screen .bomb-button{position:relative;touch-action:none;user-select:none;transition:transform 80ms,box-shadow 80ms}
+.game-screen .bomb-button.is-pressed{transform:translateY(5px) scale(.96);box-shadow:0 1px 0 #155baa;background:#f39730}
+.game-screen .bomb-button.is-fired::after{content:'';position:absolute;inset:-5px;border:3px solid #ffb33f;border-radius:50%;pointer-events:none;animation:bomb-confirm 360ms ease-out forwards}
+@keyframes bomb-confirm{from{transform:scale(.9);opacity:1}to{transform:scale(1.4);opacity:0}}
+.game-screen .skill-dock button:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #154588}
+.game-screen button:focus-visible{outline:3px solid #f7ae35;outline-offset:4px}
+.game-screen .skill-dock{bottom:20px;right:24px;max-width:240px}
+.game-screen .desktop-controls{left:24px;transform:none;font-size:11px}
+@media(max-width:900px),(pointer:coarse){
+  .game-screen .mobile-controls{position:fixed;left:0;right:0;display:flex;padding:0 16px;bottom:max(18px,env(safe-area-inset-bottom));align-items:flex-end;pointer-events:none}
+  .game-screen .bomb-button{width:90px;height:90px;pointer-events:auto}
+  .game-screen .desktop-controls{display:none}
+  .game-screen .skill-dock{bottom:max(122px,calc(env(safe-area-inset-bottom) + 122px));right:14px;max-width:154px;font-size:10px}
+  .game-screen .skill-dock button{min-height:42px;font-size:10px;padding:6px}
+  .game-screen .game-layout{padding-bottom:218px}
+  .game-screen .board-wrap{width:min(100%,calc((100dvh - 340px)*1.3))}
+}
+@media(max-height:540px) and (orientation:landscape){
+  .game-screen .game-layout{padding:0 186px 12px}
+  .game-screen .board-wrap{width:min(100%,calc((100dvh - 85px)*1.3))}
+  .game-screen .dpad{--key:52px}
+  .game-screen .skill-dock{right:12px;bottom:122px;max-width:154px}
+}
+.force-touch .game-screen .skill-dock{bottom:122px}
+@media(prefers-reduced-motion:reduce){.game-screen .bomb-button.is-fired::after{animation:none}.game-screen .dpad button{transition:none}}

@@ -4,6 +4,7 @@ import './skills.css';
 import './competition.css';
 import './lobby.css';
 import './gameplay-guide.css';
+import './controls.css';
 import { gameplayGuideMarkup } from './gameplay-guide';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName, playerAvatar } from './roster';
@@ -210,7 +211,7 @@ function gameMarkup(): string {
       </div>
       <div class="game-layout">
         <aside class="player-card hud-card"><div class="avatar avatar-player">YOU</div><div><span class="card-label">你</span><strong id="player-status">准备中</strong></div><div class="player-stats"><span><i>●</i><b id="bomb-count">${stats.maxBombs - stats.bombs}</b></span><span><i class="flame-icon">✦</i><b id="range-count">${stats.range}</b></span></div></aside>
-        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas><div class="board-legend"><strong>地图图例</strong><span><i class="legend-swatch legend-floor"></i>可走</span><span><i class="legend-swatch legend-wall"></i>固定墙</span><span><i class="legend-swatch legend-crate"></i>可破坏</span><span><i class="legend-swatch legend-danger"></i>危险区</span></div><div class="board-caption"><span id="alive-count">剩余玩家 04</span><span>SAFE ZONE · ON</span></div></section>
+        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas><div class="board-caption"><span id="alive-count">剩余玩家 04</span><span>SAFE ZONE · ON</span></div></section>
         <aside id="enemy-stack" class="enemy-stack hud-card"><div class="card-label">对手 / RIVALS</div>${enemies.map((enemy) => `<div class="enemy-row ${enemy.alive ? '' : 'is-out'}"><span class="enemy-dot" style="--enemy:${enemy.color}"></span><span>${enemy.name}</span><small>${enemy.alive ? 'ACTIVE' : 'OUT'}</small></div>`).join('')}</aside>
       </div>
       <div class="desktop-controls"><span>方向键 / WASD 移动</span><b>SPACE</b><span>放置炸弹</span></div>
@@ -268,17 +269,21 @@ function wireScreen(): void {
   app.querySelectorAll<HTMLButtonElement>('[data-bonus]').forEach(button => button.addEventListener('click', () => { if (competition) { competition.bonus = button.dataset.bonus as Bonus; competition.needsReward = false; persist(); render(); } }));
   app.querySelectorAll<HTMLButtonElement>('[data-map]').forEach(button => button.addEventListener('click', () => { selectedMap = button.dataset.map as MapId; render(); }));
   const bombButton = app.querySelector<HTMLButtonElement>('.bomb-button');
-  bombButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); bombButton.setPointerCapture(event.pointerId); holdingBomb = true; game?.placePlayerBomb(); });
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) bombButton?.addEventListener(event, () => { holdingBomb = false; });
-  app.querySelectorAll<HTMLElement>('[data-action]').forEach((element) => element.addEventListener('click', () => handleAction(element.dataset.action ?? '')));
+  bombButton?.addEventListener('pointerdown', (event) => { event.preventDefault(); bombButton.setPointerCapture(event.pointerId); bombButton.classList.add('is-pressed'); holdingBomb = true; audio.unlock(); placeBombWithFeedback(); });
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) bombButton?.addEventListener(event, () => { holdingBomb = false; bombButton.classList.remove('is-pressed'); });
+  app.querySelectorAll<HTMLElement>('[data-action]').forEach((element) => element.addEventListener('click', (event) => {
+    if (element === bombButton && event.detail > 0) return;
+    handleAction(element.dataset.action ?? '');
+  }));
   app.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((button) => button.addEventListener('click', () => {
     difficulty = button.dataset.difficulty as Difficulty;
     render();
   }));
   app.querySelectorAll<HTMLButtonElement>('[data-dir]').forEach((button) => {
     const direction = button.dataset.dir as Direction;
-    button.addEventListener('pointerdown', (event) => { event.preventDefault(); button.setPointerCapture(event.pointerId); heldDirections.add(direction); game?.movePlayer(direction); });
-    for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(name, () => heldDirections.delete(direction));
+    button.setAttribute('aria-label', {up:'向上移动',down:'向下移动',left:'向左移动',right:'向右移动'}[direction]);
+    button.addEventListener('pointerdown', (event) => { event.preventDefault(); button.setPointerCapture(event.pointerId); button.classList.add('is-pressed'); if (game?.isRunning()) navigator.vibrate?.(8); heldDirections.add(direction); game?.movePlayer(direction); });
+    for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(name, () => { heldDirections.delete(direction); button.classList.remove('is-pressed'); });
   });
 }
 
@@ -345,7 +350,7 @@ function handleAction(action: string): void {
         updateHud();
       }
       break;
-    case 'bomb': game?.placePlayerBomb(); break;
+    case 'bomb': placeBombWithFeedback(); break;
     case 'toggle-sound': soundEnabled = audio.toggle(); render(); break;
     default: break;
   }
@@ -436,7 +441,7 @@ function loop(now: number): void {
   game?.update(delta);
   const direction = [...heldDirections].at(-1);
   if (direction && screen === 'game') game?.movePlayer(direction);
-  if (holdingBomb && game?.getSkillStats().rapid && screen === 'game') game.placePlayerBomb();
+  if (holdingBomb && game?.getSkillStats().rapid && screen === 'game') placeBombWithFeedback();
   game?.render();
   updateHud();
   if (screen === 'game' || screen === 'pause') animationFrame = requestAnimationFrame(loop);
@@ -448,14 +453,14 @@ function updateHud(): void {
   const skillButton = app.querySelector<HTMLButtonElement>('#skill-button');
   if (skillButton) {
     skillButton.disabled = !skills.active || skills.respawning || !game.getPlayerStats().alive;
-    const skillMarkup = skills.active ? `${rewardIcon(skills.active)}<span>${skills.armed ? '已准备 · 放弹释放 / E 取消' : `${rewardNames[skills.active]} · E`}</span>` : '空技能槽 · 炸箱获取';
+    const skillMarkup = skills.active ? `${rewardIcon(skills.active)}<span>${skills.armed ? '已准备 · 放弹释放 / E 取消' : `${rewardNames[skills.active]} · E`}</span>` : 'E 释放技能 · 空技能槽';
     if (skillButton.innerHTML !== skillMarkup) skillButton.innerHTML = skillMarkup;
     skillButton.classList.toggle('armed', skills.armed);
   }
   const passives = app.querySelector('#passive-status');
   if (passives) passives.textContent = [skills.shield ? '◈ 护盾' : '', skills.life ? '♥ 复活 ×1' : '', skills.invincible > 0 ? `无敌 ${skills.invincible.toFixed(1)}s` : '', skills.dash > 0 ? `疾跑 ${skills.dash.toFixed(1)}s` : '', skills.rapid > 0 ? `连发 ${skills.rapid.toFixed(1)}s` : '', skills.respawning ? '等待安全复活' : ''].filter(Boolean).join(' · ');
   const swapButton = app.querySelector<HTMLButtonElement>('#swap-button');
-  if (swapButton) { swapButton.hidden = !skills.swap; swapButton.textContent = `F 替换为 ${skills.swap ?? ''}`; }
+  if (swapButton) { swapButton.hidden = false; swapButton.disabled = !skills.swap || !game.getPlayerStats().alive; swapButton.textContent = skills.swap ? `F 替换为 ${skills.swap}` : 'F 替换技能 · 需站在道具上'; }
   const timer = document.querySelector<HTMLElement>('#timer');
   const stats = game.getPlayerStats();
   const bombCount = document.querySelector<HTMLElement>('#bomb-count');
@@ -527,13 +532,31 @@ function showToast(message: string): void {
   toastTimer = 2.2;
 }
 
+function placeBombWithFeedback(): void {
+  if (!game?.isRunning()) return;
+  const before = game.getPlayerStats().bombs;
+  game.placePlayerBomb();
+  if (game.getPlayerStats().bombs <= before) return;
+  navigator.vibrate?.([22, 35, 14]);
+  const button = app.querySelector('.bomb-button');
+  button?.classList.remove('is-fired');
+  if (button instanceof HTMLElement) void button.offsetWidth;
+  button?.classList.add('is-fired');
+}
+
+function clearControlInput(): void {
+  holdingBomb = false;
+  heldDirections.clear();
+  app.querySelectorAll('.is-pressed').forEach(button => button.classList.remove('is-pressed'));
+}
+
 window.addEventListener('keydown', (event) => {
   if (screen === 'game' && !event.repeat && event.key.toLowerCase() === 'e') game?.usePlayerSkill();
   if (screen === 'game' && !event.repeat && event.key.toLowerCase() === 'f') game?.replacePlayerSkill();
   const map: Record<string, Direction | undefined> = { ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down', ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right' };
   const direction = map[event.key];
   if (direction && screen === 'game') { event.preventDefault(); heldDirections.add(direction); }
-  if (event.key === ' ' && screen === 'game') { event.preventDefault(); holdingBomb = true; if (!event.repeat) game?.placePlayerBomb(); }
+  if (event.key === ' ' && screen === 'game') { event.preventDefault(); holdingBomb = true; if (!event.repeat) placeBombWithFeedback(); }
   if (event.key === 'Escape' && screen === 'game') handleAction('pause');
 });
 
@@ -543,10 +566,10 @@ window.addEventListener('keyup', (event) => {
   const direction = map[event.key.length === 1 ? event.key.toLowerCase() : event.key];
   if (direction) heldDirections.delete(direction);
 });
-window.addEventListener('blur', () => { heldDirections.clear(); showPauseOverlay(); });
+window.addEventListener('blur', () => { clearControlInput(); showPauseOverlay(); });
 
 try { const e=saveStore.load(); if(e){saveRevision=e.revision;adoptSave(e.data);} } catch(error) { saveError=error instanceof Error?error.message:'无法读取存档'; }
 render();
 setInterval(()=>{if(game?.isRunning())persist();},2000);
 window.addEventListener('storage',event=>{if(event.key===saveStore.key){game?.pause();showPauseOverlay();saveError='其他标签页已更新存档，请刷新后继续';}});
-document.addEventListener('visibilitychange', () => { if (document.hidden) { showPauseOverlay(); if(game)persist(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { clearControlInput(); showPauseOverlay(); if(game)persist(); } });
