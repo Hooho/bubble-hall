@@ -15,8 +15,9 @@ import { cosmetics, equipCosmetic } from './cosmetics';
 import { createSaveStore } from './shared/save-store';
 import { openSaveDialog } from './save-dialog';
 import { initialSave, validateSave, savedMatchSlots, type Save, type MatchSlots } from './save';
-import { rewardNames, type Reward } from './skills';
+import { isActive, rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
+import { showPickup } from './pickup-feedback';
 import { ArcadeAudio } from './audio';
 import { Difficulty, Direction, GameEngine, GameEvent } from './game';
 
@@ -462,7 +463,7 @@ function updateHud(): void {
     swapButton.hidden = false;
     swapButton.disabled = !skills.swap || !game.getPlayerStats().alive;
     swapButton.title = skills.swap ? `F 替换为 ${skills.swap}` : '站在技能道具上，按 F 替换';
-    const markup = '<span class="swap-skill-icon" aria-hidden="true">⇄</span><span>替换</span><kbd>F</kbd>';
+    const markup = `${skills.swapKind ? rewardIcon(skills.swapKind) : '<span class="swap-skill-icon" aria-hidden="true">⇄</span>'}<span>${skills.swap ? '可替换' : '替换'}</span><kbd>F</kbd>`;
     if (swapButton.innerHTML !== markup) swapButton.innerHTML = markup;
   }
   const timer = document.querySelector<HTMLElement>('#timer');
@@ -501,8 +502,8 @@ function handleGameEvent(event: GameEvent): void {
   if (event.type === 'bomb-placed') audio.play('place');
   if (event.type === 'explosion') audio.play('blast');
   if (event.type === 'item-picked') {
-    if (event.actorId === 'player') audio.play('pickup');
-    if (event.actorId === 'player') showToast(event.item === 'coin' ? '拾取金币 +5 分' : `获得 ${rewardNames[event.item]}`);
+    if (event.actorId === 'player' && !event.capped) audio.play(event.item === 'coin' ? 'coin' : event.item === 'life' ? 'life' : isActive(event.item) ? 'pickup' : 'growth');
+    showPickup(app, event.item, game?.getActorScreenPoint(event.actorId) ?? null, event.capped, event.replaced, event.actorId === 'player');
   }
   if (event.type === 'round-over') {
     if (!trial && matchMode === 'quick' && game) settleQuick(career, quickId, difficulty, game.getStandings());

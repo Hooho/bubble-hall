@@ -39,7 +39,10 @@ export class ArcadeAudio {
     oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
   }
 
-  play(kind: 'click' | 'place' | 'blast' | 'pickup' | 'win' | 'lose' | 'start'): void {
+  play(kind: 'click' | 'place' | 'blast' | 'pickup' | 'coin' | 'growth' | 'life' | 'win' | 'lose' | 'start'): void {
+    if (kind === 'coin') this.tone(1400, 1900, .12, 0, 'sine', .2);
+    if (kind === 'growth') this.tone(500, 1100, .18, 0, 'triangle', .24);
+    if (kind === 'life') [660, 830, 990].forEach((note, i) => this.tone(note, note, .3, i * .1, 'sine', .22));
     if (kind === 'click') this.tone(700, 1050, 0.07);
     if (kind === 'place') this.tone(420, 110, 0.13, 0, 'sine', 0.5);
     if (kind === 'pickup' || kind === 'start' || kind === 'win') {

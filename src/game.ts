@@ -83,7 +83,7 @@ export type GameEvent =
   | { type: 'bomb-placed' }
   | { type: 'explosion' }
   | { type: 'actor-died'; actorId: string }
-  | { type: 'item-picked'; actorId: string; item: ItemKind }
+  | { type: 'item-picked'; actorId: string; item: ItemKind; capped?: boolean; replaced?: boolean }
   | { type: 'round-over'; result: 'win' | 'lose' | 'draw' };
 
 type Listener = (event: GameEvent) => void;
@@ -292,6 +292,16 @@ export class GameEngine {
     return [...this.actors.values()].map(a => ({ id: a.id, name: a.name, score: a.score, hits: a.hits, crates: a.crates, alive: a.alive })).sort((a, b) => b.score - a.score);
   }
 
+  public getActorScreenPoint(id: string): { x: number; y: number } | null {
+    const actor = this.actors.get(id);
+    if (!actor) return null;
+    const point = actor.group.getWorldPosition(new THREE.Vector3());
+    point.y += 1;
+    point.project(this.camera);
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+  }
+
   public grantBonus(id: string, bonus: Bonus): void {
     const actor = this.actors.get(id);
     if (!actor) return;
@@ -311,7 +321,8 @@ export class GameEngine {
   public getSkillStats() {
     const actor = this.actors.get('player');
     const item = this.items.find((item) => actor && samePosition(item.position, actor.position) && isActive(item.kind));
-    return { ...(actor?.skills ?? newSkills()), swap: item && actor?.skills.active && !actor.skills.armed ? rewardNames[item.kind] : null };
+    const swapKind = item && actor?.skills.active && !actor.skills.armed ? item.kind : null;
+    return { ...(actor?.skills ?? newSkills()), swap: swapKind ? rewardNames[swapKind] : null, swapKind };
   }
 
   public usePlayerSkill(): void {
@@ -1158,6 +1169,7 @@ export class GameEngine {
     if (index < 0) return;
     if (isActive(this.items[index].kind) && actor.skills.active && !replace) return;
     const item = this.items.splice(index, 1)[0];
+    const capped = (item.kind === 'bomb' && actor.bombCapacity >= 5) || (item.kind === 'flame' && actor.range >= 5) || (item.kind === 'speed' && actor.speed >= 1.3) || (item.kind === 'shield' && actor.skills.shield) || (item.kind === 'life' && actor.skills.life);
     const mesh = this.itemGroup.children.find((child) => child.userData.itemKey === key(item.position));
     if (mesh) { this.itemGroup.remove(mesh); this.disposeObject(mesh); }
     if (item.kind === 'coin') actor.score += MATCH_RULES.coinPoints;
@@ -1167,7 +1179,7 @@ export class GameEngine {
     if (item.kind === 'shield') actor.skills.shield = true;
     if (item.kind === 'life') actor.skills.life = true;
     if (isActive(item.kind)) actor.skills.active = item.kind;
-    this.emit({ type: 'item-picked', actorId: actor.id, item: item.kind });
+    this.emit({ type: 'item-picked', actorId: actor.id, item: item.kind, capped, replaced: replace });
   }
 
   private canEscapeAfterBomb(actor: Actor): boolean {

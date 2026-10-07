@@ -43,6 +43,8 @@ frameClock.update(-0.001);assert.equal(frameClock.remaining,120);assert.equal(fr
 const fresh = () => ({ active: null, armed: false, shield: false, life: false, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });
 const actor = { id: 'player', alive: true, skills: fresh(), position: { x: 1, y: 1 }, bombCapacity: 1, range: 2, speed: 1 };
 engine.listeners = new Set();
+const pickupEvents = [];
+engine.listeners.add(event => { if (event.type === 'item-picked') pickupEvents.push(event); });
 engine.items = [];
 engine.itemGroup = { children: [] };
 for (const [skill, timer] of [['invincible', 3], ['dash', 5], ['rapid', 4]]) {
@@ -56,12 +58,17 @@ engine.useSkill(actor); assert.equal(actor.skills.armed, true);
 engine.useSkill(actor); assert.equal(actor.skills.armed, false);
 engine.items = [{ position: { ...actor.position }, kind: 'dash' }];
 engine.collectItem(actor); assert.equal(engine.items.length, 1, 'occupied slot must not auto replace');
+assert.equal(pickupEvents.length, 0, 'blocked pickup must not trigger success feedback');
 engine.collectItem(actor, true); assert.equal(actor.skills.active, 'dash');
+assert.equal(pickupEvents.at(-1).replaced, true, 'explicit replacement has its own feedback');
 for (const kind of ['bomb', 'flame', 'speed', 'shield', 'life']) {
   for (let i = 0; i < 10; i++) { engine.items = [{ position: { ...actor.position }, kind }]; engine.collectItem(actor); }
 }
 assert.equal(actor.bombCapacity, 5); assert.equal(actor.range, 5); assert.equal(actor.speed, 1.3);
 assert.equal(actor.skills.shield, true); assert.equal(actor.skills.life, true);
+assert.equal(pickupEvents.at(-1).capped, true, 'duplicate life must not claim an upgrade');
+assert.ok(pickupEvents.some(event => event.item === 'bomb' && !event.capped));
+assert.ok(pickupEvents.some(event => event.item === 'bomb' && event.capped));
 engine.tiles = Array.from({ length: 11 }, () => Array(13).fill('floor'));
 engine.tiles[1][2] = 'crate'; engine.tiles[1][4] = 'crate'; engine.tiles[0][1] = 'wall';
 const normal = engine.getBlastCells(actor.position, 5);

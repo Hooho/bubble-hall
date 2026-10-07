@@ -1,0 +1,11 @@
+.pickup-particle{position:fixed;z-index:12;pointer-events:none;display:flex;align-items:center;gap:3px;transform:translate(-50%,-50%);color:var(--pickup-color);filter:drop-shadow(0 0 7px var(--pickup-color))}
+.pickup-particle .reward-icon{width:30px;height:30px}.pickup-particle b{font-size:22px;font-weight:900;text-shadow:0 2px white,1px 0 white,-1px 0 white}
+.pickup-banner{position:absolute;right:0;bottom:calc(100% + 10px);width:210px;max-width:calc(100vw - 28px);display:flex;align-items:center;gap:8px;padding:10px 12px;border:2px solid var(--pickup-color);border-radius:17px;background:linear-gradient(135deg,#fff,#edf9ff);box-shadow:0 4px 0 #bed8e9,0 0 16px color-mix(in srgb,var(--pickup-color) 30%,transparent);pointer-events:none;animation:pickup-arrive 180ms ease-out;color:#164b73}
+.pickup-banner::after{content:'';position:absolute;bottom:-7px;right:28px;width:10px;height:10px;background:#edf9ff;border-right:2px solid var(--pickup-color);border-bottom:2px solid var(--pickup-color);transform:rotate(45deg)}
+.pickup-banner strong{display:block;font-size:13px}.pickup-banner small{display:block;font-size:10px;margin-top:3px}.pickup-banner .reward-icon{flex-shrink:0;width:32px!important;height:32px!important}
+.skill-dock:has(.pickup-banner) #passive-status{visibility:hidden}
+.pickup-ring{position:fixed;z-index:11;pointer-events:none;width:30px;height:14px;border:2px solid var(--pickup-color);border-radius:50%;box-shadow:0 0 10px var(--pickup-color);animation:pickup-ring 650ms ease-out forwards}
+.pickup-glint{position:fixed;z-index:11;pointer-events:none;width:7px;height:7px;background:var(--pickup-color);border-radius:50%;box-shadow:0 0 9px var(--pickup-color)}
+@keyframes pickup-ring{from{transform:translate(-50%,-50%) scale(.5);opacity:.9}to{transform:translate(-50%,-50%) scale(2.3);opacity:0}}
+@keyframes pickup-arrive{from{opacity:0;transform:translateY(8px) scale(.94)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.pickup-banner{animation:none}}
