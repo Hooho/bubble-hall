@@ -169,7 +169,7 @@ function playersMarkup(): string {
 }
 
 function leaderboardMarkup(): string {
-  return page('本地积分榜', `<p class="competition-note">长期积分与战场分数分开：有效命中 +20，单次胜利 +100；晋级 +40 / +60 / +80 / +120，冠军 +400。难度倍率 1 / 1.3 / 1.6 / 2。电脑只通过实际或模拟比赛积分。</p><div class="competition-card">${leaderboard(career).map((p,i)=>`<div class="score-row ${p.id === 'player' ? 'you' : ''}"><span>${i+1}</span>${avatarMarkup(p.id)}<strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`).join('')}</div>`);
+  return page('本地积分榜', `<details class="leaderboard-rules"><summary>积分规则 <span>长期积分独立于战场分数</span></summary><p>有效命中 +20，单次胜利 +100；晋级 +40 / +60 / +80 / +120，冠军 +400。难度倍率 1 / 1.3 / 1.6 / 2。电脑只通过实际或模拟比赛积分。</p></details><div class="competition-card leaderboard-list">${leaderboard(career).map((p,i)=>`<div class="score-row ${p.id === 'player' ? 'you' : ''}"><span>${i+1}</span>${avatarMarkup(p.id)}<strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`).join('')}</div>`);
 }
 
 function tournamentMarkup(): string {
