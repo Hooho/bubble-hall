@@ -6,6 +6,7 @@ import './lobby.css';
 import './gameplay-guide.css';
 import './controls.css';
 import './settings.css';
+import './page-layout.css';
 import { gameplayGuideMarkup } from './gameplay-guide';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName, playerAvatar } from './roster';
@@ -156,7 +157,7 @@ function difficultyButton(value: Difficulty, title: string, caption: string): st
 }
 
 function page(title: string, content: string, back: 'home' | 'settings' = 'home'): string {
-  return `<main class="screen"><div class="topline"><button class="icon-button" data-action="${back}" aria-label="${back==='settings'?'返回设置':'返回大厅'}">←</button><span class="screen-kicker">BUBBLE CLUB</span></div><section class="competition-content"><h1>${title}</h1>${content}</section></main>`;
+  return `<main class="screen"><div class="topline"><button class="icon-button" data-action="${back}" aria-label="${back==='settings'?'返回设置':'返回大厅'}">←</button><span class="screen-kicker">泡泡大作战</span></div><section class="competition-content"><h1>${title}</h1>${content}</section></main>`;
 }
 
 function avatarMarkup(id: string): string {

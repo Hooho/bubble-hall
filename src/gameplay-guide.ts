@@ -4,9 +4,9 @@ import { MATCH_RULES } from './match-rules';
 
 export function gameplayGuideMarkup(back: 'home' | 'settings'): string {
   return `<main class="screen gameplay-guide">
-    <header class="topline"><button class="icon-button" data-action="${back}" aria-label="返回${back==='home'?'大厅':'设置'}">←</button><span class="screen-kicker">玩法一览 / PLAYBOOK</span></header>
+    <header class="topline"><button class="icon-button" data-action="${back}" aria-label="返回${back==='home'?'大厅':'设置'}">←</button><span class="screen-kicker">玩法一览</span></header>
     <div class="playbook-content">
-      <header class="playbook-intro"><p class="eyebrow">LEARN. PLAY. POP!</p><h1>认准道具，<br><em>玩出你的节奏。</em></h1><p>两分钟一局。炸开箱子、拿下积分，也别忘了给自己留条退路。</p></header>
+      <header class="playbook-intro"><h1>认准道具，<em>玩出你的节奏。</em></h1><p>两分钟一局。炸开箱子、拿下积分，也别忘了给自己留条退路。</p></header>
       <nav class="playbook-nav" aria-label="玩法章节"><a href="#guide-field">战场元素</a><a href="#guide-score">积分机制</a><a href="#guide-match">比赛机制</a><a href="#guide-items">道具图鉴</a></nav>
       <section id="guide-field" class="playbook-section"><h2><span>01</span> 战场元素</h2><div class="field-cards">
         <article class="field-card"><div class="field-art"><i class="guide-bomb"></i></div><h3>炸弹 <small>放下后快离开</small></h3><p>空格放弹，普通放弹间隔 0.35 秒，放下 2 秒后爆炸。初始可同时放 1 颗，拾取容量道具最多提升到 5 颗；爆炸后名额恢复。同一格不能重复放弹。</p><p>爆炸呈十字形，初始向四个方向各延伸 2 格。范围道具可将普通炸弹延伸至 5 格，连锁爆炸可能让附近炸弹提前引爆。</p></article>

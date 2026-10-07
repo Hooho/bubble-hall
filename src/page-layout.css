@@ -1,0 +1,20 @@
+/* Shared secondary-page shell. Lobby and battle deliberately do not use .topline. */
+.screen:has(> .topline){--page-gutter:28px;--page-top:18px;--page-width:1104px;padding:0}
+.screen:has(> .topline)>.topline{box-sizing:border-box;width:100%;max-width:var(--page-width);margin:0 auto;padding:var(--page-top) var(--page-gutter);gap:12px;min-height:0}
+.screen:has(> .topline)>.topline .icon-button{width:44px;height:44px;min-width:44px;padding:0;font-size:26px;flex-shrink:0}
+.screen:has(> .topline)>.topline .screen-kicker{font-size:12px;letter-spacing:.06em;line-height:1.4}
+.screen:has(> .topline)>:is(.competition-content,.playbook-content,.item-guide-content,.settings-layout,.setup-layout){box-sizing:border-box;width:100%;max-width:var(--page-width);margin:0 auto;padding:12px var(--page-gutter) 40px;min-width:0}
+.screen:has(> .topline) :is(.playbook-intro h1,.item-guide-content h1,.competition-content>h1){margin:0 0 16px;font-size:clamp(30px,3.5vw,44px);line-height:1.2;letter-spacing:-1px}
+.screen:has(> .topline) :is(.playbook-intro,.item-guide-content>header)>p{margin:0 0 16px;font-size:13px;line-height:1.7}
+.screen:has(> .topline) .playbook-nav{margin:20px 0 24px}
+.screen:has(> .topline) :is(.guide-section,.playbook-section){margin-top:24px;margin-bottom:24px}
+.screen:has(> .topline) .guide-controls{margin:20px 0;padding:14px 16px}
+@media(max-width:700px){
+ .screen:has(> .topline){--page-gutter:16px;--page-top:12px}
+ .screen:has(> .topline)>.topline .icon-button{width:40px;height:40px;min-width:40px;font-size:24px}
+ .screen:has(> .topline)>:is(.competition-content,.playbook-content,.item-guide-content,.settings-layout,.setup-layout){padding-top:6px;padding-bottom:28px}
+ .screen:has(> .topline) :is(.playbook-intro h1,.item-guide-content h1,.competition-content>h1){font-size:clamp(21px,5.2vw,32px);margin:4px 0 14px;letter-spacing:-1px}
+ .screen:has(> .topline) :is(.playbook-intro h1,.item-guide-content h1) em{display:inline}
+ .screen:has(> .topline) .playbook-nav{margin:16px 0 20px}
+ .screen:has(> .topline) :is(.guide-card,.field-card){padding:16px}
+}
