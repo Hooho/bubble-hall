@@ -219,23 +219,25 @@
     --b: clamp(96px, 31vw, 132px);
     --chip: clamp(52px, 15.5vw, 68px);
     --rcol: max(var(--b), calc(var(--chip) * 2 + 10px));
-    --deck: calc(var(--chip) + 10px + var(--b) + var(--safe-b) + 14px);
+    --control-lift: clamp(32px, 6dvh, 64px);
+    --control-bottom: calc(var(--safe-b) + var(--control-lift));
+    --deck: calc(var(--chip) + 10px + var(--b) + var(--control-bottom) + 14px);
   }
   .game-screen.layout-touch .mobile-controls {
-    position: fixed; z-index: 5; left: max(var(--g), env(safe-area-inset-left)); right: max(var(--g), env(safe-area-inset-right)); bottom: var(--safe-b);
+    position: fixed; z-index: 5; left: max(var(--g), env(safe-area-inset-left)); right: max(var(--g), env(safe-area-inset-right)); bottom: var(--control-bottom);
     display: flex; align-items: flex-end; justify-content: space-between; pointer-events: none;
   }
   .game-screen.layout-touch .dpad { --k: inherit; }
   .game-screen.layout-touch .bomb-button { --b: inherit; margin-right: calc((var(--rcol) - var(--b)) / 2); }
   .game-screen.layout-touch .skill-dock {
-    right: max(var(--g), env(safe-area-inset-right)); bottom: calc(var(--safe-b) + var(--b) + 10px);
+    right: max(var(--g), env(safe-area-inset-right)); bottom: calc(var(--control-bottom) + var(--b) + 10px);
     width: var(--rcol); justify-content: center;
   }
   .game-screen.layout-touch .skill-dock button { width: var(--chip); height: var(--chip); }
   .game-screen.layout-touch .skill-dock .reward-icon { width: calc(var(--chip) * .46); height: calc(var(--chip) * .46); }
 }
 @media (orientation: portrait) and (max-height: 700px) {
-  .game-screen.layout-touch { --topbar-h: 50px; --k: clamp(50px, 15vw, 60px); --b: 90px; --chip: 48px; --passive-h: 30px; }
+  .game-screen.layout-touch { --topbar-h: 50px; --k: clamp(50px, 15vw, 60px); --b: 90px; --chip: 48px; --passive-h: 30px; --control-lift: 24px; }
 }
 @media (orientation: portrait) and (min-width: 600px) {
   .game-screen.layout-touch .match-scores { width: min(100%, 640px); }
