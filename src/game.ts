@@ -3,13 +3,12 @@ import { attachNuwa, faceCharacter, releaseCharacter } from './character-art';
 import { mapInfo, type MapId } from './maps';
 import { roster, type Contestant } from './roster';
 import type { Bonus } from './tournament';
-import { MATCH_RULES } from './match-rules';
+import { MATCH_RULES, matchDuration } from './match-rules';
 import { preloadRewardIcons, rewardCanvas } from './reward-icons';
-import { isActive, newSkills, rewardNames, type Reward } from './skills';
+import { isActive, MAX_LIVES, newSkills, rewardNames, type Reward } from './skills';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { crateTexture, floorTexture, grassTexture, shieldBadgeTexture } from './board-art';
-import { createAncientKit, instantiate, slateTexture, type AncientKit } from './ancient-art';
 
 export const BOARD_WIDTH = 13;
 export const BOARD_HEIGHT = 11;
@@ -82,14 +81,14 @@ type Explosion = {
 };
 
 type ActorData = Omit<Actor, 'group' | 'body' | 'ring' | 'label'>;
-export type GameSnapshot = { mapId: MapId; difficulty: Difficulty; opponents: Contestant[]; tiles: TileKind[][]; actors: ActorData[]; bombs: Bomb[]; items: Item[]; remaining: number; elapsed: number; coinTimer: number; bombId: number; rng: number };
+export type GameSnapshot = { mapId: MapId; difficulty: Difficulty; opponents: Contestant[]; tiles: TileKind[][]; actors: ActorData[]; bombs: Bomb[]; items: Item[]; remaining: number; elapsed: number; coinTimer: number; bombId: number; rng: number; duration?: number };
 
 export type GameEvent =
   | { type: 'notice'; text: string }
   | { type: 'bomb-placed' }
   | { type: 'explosion' }
   | { type: 'actor-died'; actorId: string }
-  | { type: 'item-picked'; actorId: string; item: ItemKind; capped?: boolean; replaced?: boolean }
+  | { type: 'item-picked'; actorId: string; item: ItemKind; capped?: boolean; replaced?: boolean; lives?: number }
   | { type: 'round-over'; result: 'win' | 'lose' | 'draw' };
 
 type Listener = (event: GameEvent) => void;
@@ -181,6 +180,7 @@ export class GameEngine {
   private bombId = 0;
   private elapsed = 0;
   private remaining: number = MATCH_RULES.duration;
+  private duration: number = MATCH_RULES.duration;
   private coinTimer = 5;
   private mapId: MapId = 'bay';
   private opponents: Contestant[] = roster.slice(0, 3);
@@ -256,7 +256,8 @@ export class GameEngine {
   /** Attract mode for the lobby: every actor (including 'player') is AI-driven, no labels, transparent backdrop. */
   private demo = false;
 
-  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3), options: { practice?: boolean; demo?: boolean } = {}): void {
+  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3), options: { practice?: boolean; demo?: boolean; duration?: number } = {}): void {
+    this.duration = matchDuration(options.duration);
     this.demo = options.demo ?? false;
     this.practice = options.practice ?? false;
     this.mapId = mapId;
@@ -293,12 +294,12 @@ export class GameEngine {
   }
 
   public snapshot(): GameSnapshot {
-    return structuredClone({ mapId: this.mapId, difficulty: this.difficulty, opponents: this.opponents, tiles: this.tiles, actors: [...this.actors.values()].map(({ group, body, ring, label, ...data }) => data), bombs: this.bombs, items: this.items, remaining: this.remaining, elapsed: this.elapsed, coinTimer: this.coinTimer, bombId: this.bombId, rng: this.rng.exportState() });
+    return structuredClone({ mapId: this.mapId, difficulty: this.difficulty, opponents: this.opponents, tiles: this.tiles, actors: [...this.actors.values()].map(({ group, body, ring, label, ...data }) => data), bombs: this.bombs, items: this.items, remaining: this.remaining, duration: this.duration, elapsed: this.elapsed, coinTimer: this.coinTimer, bombId: this.bombId, rng: this.rng.exportState() });
   }
 
   public restore(snapshot: GameSnapshot): void {
     const s = structuredClone(snapshot);
-    this.start(s.difficulty, s.mapId, s.opponents);
+    this.start(s.difficulty, s.mapId, s.opponents, { duration: s.duration });
     this.clearGroup(this.mapGroup); this.clearGroup(this.actorGroup); this.actors.clear(); this.tileMeshes.clear();
     this.tiles = s.tiles; this.createMapMeshes();
     for (const a of s.actors) {
@@ -307,7 +308,7 @@ export class GameEngine {
     }
     this.bombs.splice(0, this.bombs.length, ...s.bombs); this.items.splice(0, this.items.length, ...s.items);
     this.bombs.forEach(b => this.addBombVisual(b)); this.items.forEach(i => this.createItemMesh(i));
-    this.remaining = Math.max(0, Math.min(s.remaining, MATCH_RULES.duration - s.elapsed)); this.elapsed = s.elapsed; this.coinTimer = s.coinTimer; this.bombId = s.bombId; this.rng.importState(s.rng);
+    this.remaining = Math.max(0, Math.min(s.remaining, (this.duration = matchDuration(s.duration)) - s.elapsed)); this.elapsed = s.elapsed; this.coinTimer = s.coinTimer; this.bombId = s.bombId; this.rng.importState(s.rng);
     this.updateMeshes(); this.pause();
   }
 
@@ -346,6 +347,11 @@ export class GameEngine {
 
   public getStandings() {
     return [...this.actors.values()].map(a => ({ id: a.id, name: a.name, score: a.score, hits: a.hits, crates: a.crates, alive: a.alive })).sort((a, b) => b.score - a.score);
+  }
+
+  /** Body colour of every actor, so HUD cards can match the characters on the board. */
+  public getActorColors(): Record<string, string> {
+    return Object.fromEntries([...this.actors.values()].map(a => [a.id, `#${a.color.toString(16).padStart(6, '0')}`]));
   }
 
   public getActorScreenPoint(id: string): { x: number; y: number } | null {
@@ -505,7 +511,7 @@ export class GameEngine {
     this.tileMeshes.clear();
     this.bombId = 0;
     this.elapsed = 0;
-    this.remaining = MATCH_RULES.duration;
+    this.remaining = this.duration;
     this.coinTimer = 5;
     this.shakeTime = 0;
     this.shakeStrength = 0;
@@ -584,13 +590,10 @@ export class GameEngine {
     this.mapTextures.forEach((texture) => texture.dispose());
     this.mapTextures = [];
     this.treeParts = null;
-    this.ancientKit?.dispose();
-    this.ancientKit = null;
     if (this.boardStyle === 'classic') { this.createClassicMapMeshes(); return; }
     const theme = mapInfo(this.mapId);
     const forest = 'decor' in theme && theme.decor === 'forest';
-    const ancient = 'decor' in theme && theme.decor === 'ancient';
-    const floorMap = forest ? grassTexture(BOARD_WIDTH, BOARD_HEIGHT, theme.floor, 2187) : ancient ? slateTexture(BOARD_WIDTH, BOARD_HEIGHT, 2187) : floorTexture(BOARD_WIDTH, BOARD_HEIGHT, theme.floor, theme.grout, 2187);
+    const floorMap = forest ? grassTexture(BOARD_WIDTH, BOARD_HEIGHT, theme.floor, 2187) : floorTexture(BOARD_WIDTH, BOARD_HEIGHT, theme.floor, theme.grout, 2187);
     const crateMap = crateTexture(theme.crate);
     floorMap.anisotropy = crateMap.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
     this.mapTextures = [floorMap, crateMap];
@@ -634,8 +637,6 @@ export class GameEngine {
         let mesh: THREE.Mesh;
         if (kind === 'wall' && forest) {
           mesh = this.createTree(x, y, theme.wall);
-        } else if (kind === 'wall' && ancient) {
-          mesh = this.createAncientWall(x, y);
         } else if (kind === 'wall') {
           mesh = rounded(0.97, wallH, 0.97, wallMaterial, 0.12);
           mesh.position.set(this.worldX(x), -0.105 + wallH / 2, this.worldZ(y));
@@ -710,25 +711,6 @@ export class GameEngine {
         this.tileMeshes.set(key(position), mesh);
       }
     }
-  }
-
-  private ancientKit: AncientKit | null = null;
-
-  /** Ancient courtyard: red palace walls with glazed roofs on the border, stone lions as inner pillars. */
-  private createAncientWall(x: number, y: number): THREE.Mesh {
-    this.ancientKit ??= createAncientKit();
-    const border = x === 0 || y === 0 || x === BOARD_WIDTH - 1 || y === BOARD_HEIGHT - 1;
-    const mesh = instantiate(border ? this.ancientKit.wall : this.ancientKit.lion);
-    mesh.position.set(this.worldX(x), -0.105, this.worldZ(y));
-    if (border) {
-      // top/bottom rows run along x; side columns run along z (corners keep the x orientation)
-      if (!(y === 0 || y === BOARD_HEIGHT - 1)) mesh.rotation.y = Math.PI / 2;
-    } else {
-      // lions face the viewer, mirrored left/right of centre so pairs look at each other slightly
-      mesh.rotation.y = x < (BOARD_WIDTH - 1) / 2 ? 0.25 : x > (BOARD_WIDTH - 1) / 2 ? -0.25 : 0;
-      mesh.scale.setScalar(1.22);
-    }
-    return mesh;
   }
 
   private treeParts: { trunk: THREE.BufferGeometry; trunkMat: THREE.Material; tiers: THREE.BufferGeometry[]; leaves: THREE.Material[] } | null = null;
@@ -1087,12 +1069,12 @@ export class GameEngine {
         const attacker = cellOwners.get(key(actor.position))?.find(id => id !== actor.id);
         if (attacker) this.award(attacker, 'hit');
         if (s.shield) { s.shield = false; s.invincible = 0.8; this.emit({ type: 'notice', text: `${actor.name}的护盾被击破` }); continue; }
-        if (s.life) {
-          s.life = false;
+        if (s.life > 0) {
+          s.life -= 1;
           s.respawning = true;
           actor.respawnDelay = 0;
           actor.group.visible = false;
-          if (actor.id === 'player') this.emit({ type: 'notice', text: '额外生命：等待安全复活' });
+          if (actor.id === 'player') this.emit({ type: 'notice', text: s.life > 0 ? `消耗 1 条额外生命，还剩 ${s.life} 条：等待安全复活` : '消耗最后 1 条额外生命：等待安全复活' });
           continue;
         }
         actor.alive = false;
@@ -1450,7 +1432,7 @@ export class GameEngine {
     if (index < 0) return;
     if (isActive(this.items[index].kind) && actor.skills.active && !replace) return;
     const item = this.items.splice(index, 1)[0];
-    const capped = (item.kind === 'bomb' && actor.bombCapacity >= 5) || (item.kind === 'flame' && actor.range >= 5) || (item.kind === 'speed' && actor.speed >= 1.3) || (item.kind === 'shield' && actor.skills.shield) || (item.kind === 'life' && actor.skills.life);
+    const capped = (item.kind === 'bomb' && actor.bombCapacity >= 5) || (item.kind === 'flame' && actor.range >= 5) || (item.kind === 'speed' && actor.speed >= 1.3) || (item.kind === 'shield' && actor.skills.shield) || (item.kind === 'life' && actor.skills.life >= MAX_LIVES);
     const mesh = this.itemGroup.children.find((child) => child.userData.itemKey === key(item.position));
     if (mesh) { this.itemGroup.remove(mesh); this.disposeObject(mesh); }
     if (item.kind === 'coin') actor.score += MATCH_RULES.coinPoints;
@@ -1458,9 +1440,9 @@ export class GameEngine {
     if (item.kind === 'flame') actor.range = Math.min(5, actor.range + 1);
     if (item.kind === 'speed') actor.speed = Math.min(1.3, actor.speed + 0.1);
     if (item.kind === 'shield') actor.skills.shield = true;
-    if (item.kind === 'life') actor.skills.life = true;
+    if (item.kind === 'life') actor.skills.life = Math.min(MAX_LIVES, actor.skills.life + 1);
     if (isActive(item.kind)) actor.skills.active = item.kind;
-    this.emit({ type: 'item-picked', actorId: actor.id, item: item.kind, capped, replaced: replace });
+    this.emit({ type: 'item-picked', actorId: actor.id, item: item.kind, capped, replaced: replace, lives: actor.skills.life });
   }
 
   private canEscapeAfterBomb(actor: Actor): boolean {

@@ -8,12 +8,13 @@ import './controls.css';
 import './settings.css';
 import './page-layout.css';
 import './game-layout.css';
+import './game-screen.css';
 import './theme.css';
 import { notify, showDialog } from './ui-dialog';
 import { gameplayGuideMarkup } from './gameplay-guide';
 import { maps, mapInfo, type MapId } from './maps';
 import { roster, playerName, personalityName, playerAvatar } from './roster';
-import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, playerEliminated, simulateToEnd, roundTitle, isTopTwo, advancingIds, replayMembers, tournamentOrder, ranked, type Tournament, type Bonus, type Match } from './tournament';
+import { createTournament, advance, pendingPlayerMatch, submitMatch, simulate, playerEliminated, simulateToEnd, multiplier, roundTitle, isTopTwo, advancingIds, replayMembers, tournamentOrder, ranked, type Tournament, type Bonus, type Match } from './tournament';
 import { itemGuideMarkup } from './item-guide';
 import { newCareer, settleQuick, settleTournament, leaderboard } from './career';
 import { cosmetics, equipCosmetic } from './cosmetics';
@@ -22,7 +23,7 @@ import { openSaveDialog } from './save-dialog';
 import { initialSave, validateSave, savedMatchSlots, type Save, type MatchSlots } from './save';
 import { isActive, rewardNames, type Reward } from './skills';
 import { rewardIcon } from './reward-icons';
-import { showPickup } from './pickup-feedback';
+import { showPickup, pickupFamily } from './pickup-feedback';
 import { ArcadeAudio } from './audio';
 import { Difficulty, Direction, GameEngine, GameEvent } from './game';
 
@@ -44,6 +45,9 @@ for (const eventName of ['contextmenu', 'selectstart', 'dragstart'] as const) {
 
 let screen: Screen = 'home';
 let difficulty: Difficulty = 'normal';
+/** Championship setup view (difficulty picker) is shown instead of the bracket. */
+let champSetup = false;
+let champDifficulty: Difficulty = 'normal';
 let selectedMap: MapId = 'bay';
 let opponents = roster.slice(0, 3);
 let competition: Tournament | null = null;
@@ -105,6 +109,7 @@ let toastTimer = 0;
 function render(): void {
   app.innerHTML = screenMarkup(screen);
   wireScreen();
+  wireLeaderboard();
   if (screen === 'game') mountGame();
   applyPreferences();
 }
@@ -134,12 +139,12 @@ function homeMarkup(): string {
       <div class="home-orbit orbit-one"></div><div class="home-orbit orbit-two"></div>
       <div class="home-copy">
         <h1 class="arc-title" aria-label="快跑！有炸弹！"><span class="arc-title-line" aria-hidden="true"><i>快</i><i>跑</i><i>！</i></span><span class="arc-title-line" aria-hidden="true"><i>有</i><i>炸</i><i>弹</i><i>！</i></span></h1>
-        <p class="home-subtitle">两分钟积分对战。<br>炸箱 +10，命中 +100；存活到最后或超时争最高分。</p>
+        <p class="home-subtitle">${minutesText()}积分对战。<br>炸箱 +10，命中 +100；存活到最后或超时争最高分。</p>
       </div>
       <div class="home-actions">
-        <div class="lobby-secondary"><button data-action="trial"><span aria-hidden="true">▷</span> 试玩</button><button data-action="overview"><span aria-hidden="true">▤</span> 玩法一览</button></div>
-        <button class="button button-primary mode-entry" data-action="enter-quick"><span><strong>单次对战</strong><small>${matches.quick?'继续上次比赛':'轻松开局 · 两分钟对战'}</small></span><b aria-hidden="true">▶</b></button>
-        <button class="button mode-entry championship-entry" data-action="enter-championship"><span><strong>冠军之路</strong><small>${matches.championship || (competition&&competition.round!=='complete')?'继续上次比赛':competition?'查看本届结果':'64 位选手 · 冲击冠军'}</small></span><b aria-hidden="true">♛</b></button>
+        <div class="lobby-secondary"><button data-action="trial"><i aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M7 4.8v10.4a.8.8 0 0 0 1.2.7l8.2-5.2a.8.8 0 0 0 0-1.4L8.2 4.1A.8.8 0 0 0 7 4.8z" fill="currentColor"/></svg></i>试玩</button><button data-action="overview"><i aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3.5 4.5c2.4-.6 4.6-.3 6.5 1v10.5c-1.9-1.3-4.1-1.6-6.5-1zM16.5 4.5c-2.4-.6-4.6-.3-6.5 1v10.5c1.9-1.3 4.1-1.6 6.5-1z" fill="currentColor"/></svg></i>玩法一览</button></div>
+        <button class="button button-primary mode-entry" data-action="enter-quick"><span><strong>单次对战</strong><small>${matches.quick?'继续上次比赛':`轻松开局 · ${minutesText()}对战`}</small></span><b class="mode-icon mode-icon-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.6 5.3c-.9-.6-2.1.1-2.1 1.2v11c0 1.1 1.2 1.8 2.1 1.2l8.6-5.5c.8-.5.8-1.8 0-2.4z" fill="currentColor"/></svg></b></button>
+        <button class="button mode-entry championship-entry" data-action="enter-championship"><span><strong>冠军之路</strong><small>${matches.championship || (competition&&competition.round!=='complete')?'继续上次比赛':competition?'查看本届结果':'64 位选手 · 冲击冠军'}</small></span><b class="mode-icon mode-icon-crown" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.2 9.3l3.9 3 3.1-5.1a.9.9 0 0 1 1.6 0l3.1 5.1 3.9-3a.6.6 0 0 1 1 .6l-1.7 7.6H4.9L3.2 9.9a.6.6 0 0 1 1-.6z" fill="currentColor"/><rect x="5" y="18.3" width="14" height="2.2" rx="1.1" fill="currentColor"/><circle cx="12" cy="4.6" r="1.5" fill="currentColor"/><circle cx="3.6" cy="7.9" r="1.3" fill="currentColor"/><circle cx="20.4" cy="7.9" r="1.3" fill="currentColor"/></svg></b></button>
       </div>
       <div class="home-footer">随时开局 · 无需登录 · 进度保存在本机</div>
     </main>`;
@@ -150,7 +155,7 @@ function setupMarkup(): string {
     <main class="screen setup-screen">
       <div class="topline"><button class="icon-button" data-action="home" aria-label="返回">←</button><span class="screen-kicker">大厅</span><span class="topline-spacer"></span></div>
       <section class="setup-layout">
-        <div class="setup-intro"><h2>单次对战</h2><p class="page-sub">选好地图和电脑难度，两分钟一局。</p><p class="setup-rules">通用比赛规则：每场 2 分钟。炸箱 +10，命中对手 +100。死亡即淘汰；最后一人提前获胜，否则超时比较存活者积分；自爆和无敌期间受击不计分。</p></div>
+        <div class="setup-intro"><h2>单次对战</h2><p class="page-sub">选好地图和电脑难度，${minutesText()}一局。</p><p class="setup-rules">通用比赛规则：每场 2 分钟。炸箱 +10，命中对手 +100。死亡即淘汰；最后一人提前获胜，否则超时比较存活者积分；自爆和无敌期间受击不计分。</p></div>
         <div class="setup-panel">
           <div class="setup-block"><div class="field-label">地图</div><div class="map-grid">${maps.map(m => `<button class="map-option ${selectedMap === m.id ? 'selected' : ''}" data-map="${m.id}">${mapThumb(m)}<strong>${m.name}</strong><small>${m.caption}</small></button>`).join('')}<button class="map-option" data-action="random-map">随机地图 ↻</button></div></div>
           <div class="setup-block"><div class="field-label">电脑难度</div><div class="difficulty-row">
@@ -176,8 +181,8 @@ function difficultyButton(value: Difficulty, title: string, caption: string): st
   return `<button class="difficulty ${difficulty === value ? 'selected' : ''}" data-difficulty="${value}"><strong>${title}</strong><small>${caption}</small></button>`;
 }
 
-function page(title: string, content: string, back: 'home' | 'settings' = 'home'): string {
-  return `<main class="screen"><div class="topline"><button class="icon-button" data-action="${back}" aria-label="${back==='settings'?'返回设置':'返回大厅'}">←</button><span class="screen-kicker">${back==='settings'?'设置':'大厅'}</span></div><section class="competition-content"><h1>${title}</h1>${content}</section></main>`;
+function page(title: string, content: string, back: 'home' | 'settings' = 'home', headerAction = '', screenClass = ''): string {
+  return `<main class="screen ${screenClass}"><div class="topline"><button class="icon-button" data-action="${back}" aria-label="${back==='settings'?'返回设置':'返回大厅'}">←</button><span class="screen-kicker">${back==='settings'?'设置':'大厅'}</span></div><section class="competition-content">${headerAction ? `<div class="page-title-row"><h1>${title}</h1>${headerAction}</div>` : `<h1>${title}</h1>`}${content}</section></main>`;
 }
 
 function avatarMarkup(id: string): string {
@@ -190,22 +195,59 @@ function playersMarkup(): string {
 
 function leaderboardMarkup(): string {
   const rows = leaderboard(career);
-  const row = (p: typeof rows[number], i: number) => `<div class="score-row ${p.id === 'player' ? 'you' : ''}"><span>${i+1}</span>${avatarMarkup(p.id)}<strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`;
   const me = rows.findIndex(p => p.id === 'player');
-  const top = rows.slice(0, 16), rest = rows.slice(16);
-  return page('积分榜', `<p class="page-sub">本地离线榜 · ${rows.length} 位选手</p>
-    ${me >= 0 ? `<div class="my-rank-card"><span>我的名次</span><b>第 ${me + 1} 名</b><span>${rows[me].points} 分 · 冠军 ${rows[me].crowns}</span></div>` : ''}
+  const tournaments = career.history.filter(h => h.mode === 'championship').length;
+  const row = (p: typeof rows[number], i: number) => `<div class="score-row ${p.id === 'player' ? 'you' : ''} ${i < 3 ? `top-${i + 1}` : ''}" ${p.id === 'player' ? 'id="lb-me"' : ''}><span>${i+1}</span>${avatarMarkup(p.id)}<strong>${playerName(p.id)}</strong><span>${p.points} 分</span><small>冠军 ${p.crowns}</small></div>`;
+  return page('积分榜', `<div class="lb-summary"><div><small>我的排名</small><strong>第 ${me + 1} 名 / ${rows.length} 位</strong></div><div><small>已进行冠军赛</small><strong>${tournaments} 次</strong></div></div>
     <details class="leaderboard-rules"><summary>积分规则 <span>长期积分独立于战场分数</span></summary><p>有效命中 +20，单次胜利 +100；晋级 +40 / +60 / +80 / +120，冠军 +400。难度倍率 1 / 1.3 / 1.6 / 2。电脑只通过实际或模拟比赛积分。</p></details>
-    <div class="competition-card leaderboard-list">${top.map(row).join('')}</div>
-    ${rest.length ? `<details class="stage-archive leaderboard-more"><summary>第 17–${rows.length} 名 <span>展开查看</span></summary><div class="competition-card leaderboard-list">${rest.map((p, i) => row(p, i + 16)).join('')}</div></details>` : ''}`);
+    <div class="competition-card leaderboard-list">${rows.map(row).join('')}</div>
+    <div class="lb-floating" role="group" aria-label="积分榜快捷操作">
+      <button type="button" class="lb-scroll-top" data-lb="top" aria-label="滚动到顶部" hidden>↑</button>
+      <button type="button" class="lb-locate" data-lb="me" aria-label="定位到我的排名，第 ${me + 1} 名"><span aria-hidden="true">⌖</span>定位自己<b>第 ${me + 1} 名</b></button>
+    </div>`, 'home', '', 'leaderboard-screen');
+}
+
+function wireLeaderboard(): void {
+  const top = app.querySelector<HTMLButtonElement>('.lb-scroll-top');
+  if (!top) return;
+  const reduce = () => settings.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  top.addEventListener('click', () => window.scrollTo({ top: 0, behavior: reduce() ? 'auto' : 'smooth' }));
+  app.querySelector('.lb-locate')?.addEventListener('click', () => {
+    const mine = app.querySelector<HTMLElement>('#lb-me');
+    if (!mine) return;
+    mine.scrollIntoView({ behavior: reduce() ? 'auto' : 'smooth', block: 'center' });
+    mine.classList.remove('lb-flash'); void mine.offsetWidth; mine.classList.add('lb-flash');
+  });
+}
+
+window.addEventListener('scroll', () => {
+  const top = app.querySelector<HTMLButtonElement>('.lb-scroll-top');
+  if (top) top.hidden = window.scrollY < 320;
+}, { passive: true });
+
+const DIFFICULTY_INFO: Record<Difficulty, { name: string; note: string }> = {
+  easy: { name: '轻松', note: '反应慢 · 适合熟悉规则' },
+  normal: { name: '标准', note: '会躲避 · 会追击' },
+  hard: { name: '困难', note: '会封路 · 不会作弊' },
+  master: { name: '大师', note: '快速判断 · 熟练用技能' },
+};
+
+/** Pick the AI difficulty before a new championship starts. */
+function championshipSetupMarkup(): string {
+  const running = competition && competition.round !== 'complete';
+  const options = (Object.keys(DIFFICULTY_INFO) as Difficulty[]).map(d => `<button type="button" class="difficulty champ-difficulty ${champDifficulty === d ? 'selected' : ''}" data-champ-difficulty="${d}" aria-pressed="${champDifficulty === d}"><strong>${DIFFICULTY_INFO[d].name}</strong><small>${DIFFICULTY_INFO[d].note}</small><b>积分 ×${multiplier[d]}</b></button>`).join('');
+  return page('冠军之路', `<p class="page-sub">64 位选手分组对战，每组前两名晋级：64 → 32 → 16 → 8 → 4 人总决赛。整届比赛使用同一难度，难度越高，长期积分倍率越高。</p>
+    <section class="competition-card champ-setup" aria-labelledby="champ-diff-title"><h3 id="champ-diff-title">选择电脑难度</h3><div class="difficulty-row champ-difficulty-row">${options}</div></section>
+    ${running ? '<p class="page-sub champ-warning">⚠ 当前有一届冠军赛正在进行，开始新的一届会放弃它。</p>' : ''}
+    <div class="page-actions champ-setup-actions"><button class="button button-primary button-large" data-action="tournament-start">开始冠军赛 · ${DIFFICULTY_INFO[champDifficulty].name} <span aria-hidden="true">→</span></button>${competition ? '<button class="button" data-action="tournament-setup-cancel">取消</button>' : ''}</div>`);
 }
 
 function tournamentMarkup(): string {
   const t = competition;
-  if (!t) return page('冠军赛', '<p>64 名选手，一座奖杯。</p><button class="button button-primary" data-action="new-tournament">创建赛事</button>');
+  if (!t || champSetup) return championshipSetupMarkup();
   const order = tournamentOrder(t);
   const groupCards = (matches: Match[], final = false) => matches.map((m,i)=>({m,i})).sort((a,b)=>Number(b.m.members.includes('player'))-Number(a.m.members.includes('player'))).map(({m,i})=>`<article class="competition-card ${m.members.includes('player')?'my-match':''}"><strong>第 ${i+1} 组${m.members.includes('player')?' · 我的比赛':''}</strong>${(m.standings??m.members.map(id=>({id,score:null}))).map(p=>`<div class="score-row ${p.id==='player'?'you':''}"><strong>${playerName(p.id)}</strong><span>${p.score??'待赛'}</span>${isTopTwo(t)?(advancingIds(t,m).includes(p.id)?'<b>晋级</b>':final&&m.winner===p.id?'<b>冠军</b>':''):(m.winner===p.id?'<b>胜出</b>':'')}</div>`).join('')}</article>`).join('');
-  return page(t.round === 'complete' ? '冠军诞生' : roundTitle(t), `<p class="competition-note">${isTopTwo(t)?'64 → 32 → 16 → 8 → 4 · 每组前两名晋级，四人总决赛决出冠亚季军。存活优先，再按本局得分排名；晋级线同分加赛。':'旧赛制存档 · 四人组第一名晋级，决赛三局两胜；本赛事按原规则完成。'}</p>
+  return page(t.round === 'complete' ? '冠军诞生' : roundTitle(t), `<p class="champ-difficulty-tag">难度 · ${DIFFICULTY_INFO[t.difficulty].name} <span>积分 ×${multiplier[t.difficulty]}</span></p><p class="competition-note">${isTopTwo(t)?'64 → 32 → 16 → 8 → 4 · 每组前两名晋级，四人总决赛决出冠亚季军。存活优先，再按本局得分排名；晋级线同分加赛。':'旧赛制存档 · 四人组第一名晋级，决赛三局两胜；本赛事按原规则完成。'}</p>
     ${t.round === 'complete' ? (() => {
       const place = order.indexOf('player') + 1;
       const rec = career.history.find(h => h.id === t.id);
@@ -213,14 +255,14 @@ function tournamentMarkup(): string {
       const note = place <= 4 ? '登上领奖台！' : outRound ? `止步「${roundTitle(t, outRound.round)}」` : '';
       return `${podiumMarkup(order)}
       <div class="my-result-card"><div><span>你的最终名次</span><b>第 ${place} 名</b><small>${note}</small></div>${rec ? `<div><span>本届积分</span><b>+${rec.points}</b><small>奖励币 +${place === 1 ? 200 : place <= 8 ? 80 : 20}</small></div>` : ''}</div>
-      <div class="page-actions"><button class="button button-primary" data-action="new-tournament">再开一届</button><button class="button" data-action="home">返回大厅</button></div>`; })() : `<div class="page-actions">${t.needsReward ? (['capacity','speed','shield'] as Bonus[]).map(b => `<button class="button button-primary" data-bonus="${b}">下一场：${b === 'capacity' ? '容量 +1' : b === 'speed' ? '速度 +1 档' : '一次护盾'}</button>`).join('') : (playerEliminated(t) ? `<button class="button button-primary" data-action="tournament-autosim">模拟至产生冠军</button>` : `<button class="button button-primary" data-action="tournament-play">${pendingPlayerMatch(t) ? t.replay ? '进入同分加赛' : '进入我的比赛' : '模拟其余比赛并继续'}</button>`)}</div>`}
+`; })() : `<div class="page-actions">${t.needsReward ? (['capacity','speed','shield'] as Bonus[]).map(b => `<button class="button button-primary" data-bonus="${b}">下一场：${b === 'capacity' ? '容量 +1' : b === 'speed' ? '速度 +1 档' : '一次护盾'}</button>`).join('') : (playerEliminated(t) ? `<button class="button button-primary" data-action="tournament-autosim">模拟至产生冠军</button>` : `<button class="button button-primary" data-action="tournament-play">${pendingPlayerMatch(t) ? t.replay ? '进入同分加赛' : '进入我的比赛' : '模拟其余比赛并继续'}</button>`)}</div>`}
     ${!isTopTwo(t)&&t.finals.length?`<div class="final-score">决赛大比分 ${t.finals.map(id=>`${playerName(id)} ${t.finalWins[id]??0}`).join(' : ')}</div>`:''}
     ${(() => { const mine = t.matches.filter(m => m.members.includes('player')); const rest = t.matches.filter(m => !m.members.includes('player'));
       if (!mine.length || !rest.length) return `<div class="competition-grid">${groupCards(t.matches,t.round==='final')}</div>`;
       const idx = (m: Match) => t.matches.indexOf(m);
       const cards = (list: Match[]) => groupCards(t.matches, t.round==='final').split('</article>').filter(Boolean).map(c => c + '</article>').filter(c => list.some(m => c.includes(`第 ${idx(m)+1} 组`)));
       return `<div class="competition-grid my-group">${cards(mine).join('')}</div><details class="stage-archive other-groups"><summary>其余 ${rest.length} 组 <span>展开查看</span></summary><div class="competition-grid">${cards(rest).join('')}</div></details>`; })()}
-    ${t.archive.length?`<h2 class="section-title">已完成轮次</h2>${t.archive.map((g,i)=>`<details class="stage-archive"><summary>${roundTitle(t,g.round)} · ${g.matches.length} 场 <span>查看赛果</span></summary><div class="competition-grid">${groupCards(g.matches,g.round==='final')}</div></details>`).join('')}`:''}`);
+    ${t.archive.length?`<h2 class="section-title">已完成轮次</h2>${t.archive.map((g,i)=>`<details class="stage-archive"><summary>${roundTitle(t,g.round)} · ${g.matches.length} 场 <span>查看赛果</span></summary><div class="competition-grid">${groupCards(g.matches,g.round==='final')}</div></details>`).join('')}`:''}`, 'home', t.round === 'complete' ? '<button class="button button-primary page-title-action" data-action="new-tournament">再开一届 <span aria-hidden="true">→</span></button>' : '');
 }
 
 /** Runs every remaining match after the player is knocked out, then shows the final standings. */
@@ -290,10 +332,16 @@ function handlePlayerKnockedOut(): void {
     }).then(ok => {
       if (game !== engine || screen !== 'game') return;
       if (!ok) { engine.resume(); return; }
-      if (championship) autoSimAfterRound = true;
-      fastForwardMatch();
+      simulateRestAfterKnockout();
     });
   }, 0);
+}
+
+/** Player is out: finish this match headlessly; in the championship also simulate the rest of the event. */
+function simulateRestAfterKnockout(): void {
+  if (!game || trial || game.getPlayerStats().alive || game.getResult()) return;
+  if (matchMode === 'championship' && competition) autoSimAfterRound = true;
+  fastForwardMatch();
 }
 
 function progressTournament(): void {
@@ -313,21 +361,41 @@ function progressTournament(): void {
   stopGame(); startNewRound = true; screen = 'game'; render();
 }
 
+const touchQuery = matchMedia('(max-width: 900px), (pointer: coarse)');
+/** Touch controls layout: narrow screen, coarse pointer, or forced in 设置 → 操作方式. */
+const touchLayout = (): boolean => settings.controls === 'touch' || touchQuery.matches;
+
+function gameModeLabel(): string {
+  if (trial) return '试玩 · 不计积分';
+  if (matchMode !== 'championship' || !competition) return '单次对战';
+  if (replaying) return '冠军赛 · 加赛';
+  const title = roundTitle(competition);
+  return `冠军赛 · ${title.includes('·') ? title.split('·').pop()!.trim() : title}`;
+}
+
 function gameMarkup(): string {
+  const canRestart = matchMode !== 'championship' || trial;
   return `
-    <main class="screen game-screen">
-      <div class="game-topbar">
-        <div class="match-id"><span class="live-dot"></span><span>${trial ? '试玩 · ' : ''}${mapInfo(selectedMap).name}</span><small>${trial ? '试玩 · 不计长期积分' : matchMode === 'championship' ? '冠军之路' : '单次对战'}</small></div>
-        <div class="round-clock"><small>剩余时间</small><strong id="timer">02:00</strong></div>
-        <div class="game-actions"><button class="mini-action" data-action="pause" aria-label="暂停" title="暂停（Esc）">Ⅱ</button>${matchMode === 'championship' && !trial ? '' : '<button class="mini-action desktop-only" data-action="restart-ask" aria-label="重新开始" title="重新开始">↻</button>'}</div>
-      </div>
+    <main class="screen game-screen${touchLayout() ? ' layout-touch' : ''}">
+      <header class="game-topbar">
+        <div class="match-id"><span class="mode-chip">${gameModeLabel()}</span><strong>${mapInfo(selectedMap).name}</strong></div>
+        <div class="round-clock" role="timer" aria-label="剩余时间"><strong id="timer">0${matchMinutes()}:00</strong></div>
+        <div class="game-actions">${canRestart ? '<button class="mini-action" data-action="restart-ask" aria-label="重新开始" title="重新开始">↻</button>' : ''}<button class="mini-action" data-action="pause" aria-label="暂停" title="暂停（Esc）">Ⅱ</button></div>
+      </header>
       <div class="game-layout">
         <aside id="match-scores" class="match-scores" aria-label="本局所有选手比分"></aside>
-        <section class="board-wrap"><div class="board-glow"></div><canvas id="game-canvas"></canvas><div class="base-attributes" aria-label="玩家基础属性"><div title="本局炸弹总容量，爆炸后释放名额">${rewardIcon('bomb')}<span>容量 <b id="base-capacity">1</b><small id="base-available">可放 1</small></span></div><div title="普通炸弹向四个方向延伸的格数">${rewardIcon('flame')}<span>范围 <b id="base-range">2 格</b></span></div><div title="基础移动速度，不含临时疾跑加成">${rewardIcon('speed')}<span>移速 <b id="base-speed">100%</b></span></div></div></section>
+        <section class="board-stage">
+          <div class="board-card">
+            <div class="board-wrap"><canvas id="game-canvas"></canvas></div>
+            <div class="base-attributes" aria-label="玩家基础属性"><div title="炸弹容量：当前可放 / 总容量，爆炸后释放名额">${rewardIcon('bomb')}<span>容量 <b id="base-capacity">1/1</b></span></div><div title="普通炸弹向四个方向延伸的格数">${rewardIcon('flame')}<span>范围 <b id="base-range">2 格</b></span></div><div title="基础移动速度，不含临时疾跑加成">${rewardIcon('speed')}<span>移速 <b id="base-speed">100%</b></span></div></div>
+          </div>
+          <div id="passive-status" aria-label="保护与持续效果"></div>
+        </section>
       </div>
-      <div class="desktop-controls"><span>方向键 / WASD 移动</span><b>SPACE</b><span>放置炸弹</span></div>
-      <div class="mobile-controls"><div class="dpad"><button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="down">▼</button><button data-dir="right">▶</button></div><button class="bomb-button" data-action="bomb" aria-label="放置炸弹"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 13l5-6 5 3-2 5M34 5l2-3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M27 12l9 7-5 6-9-7z" fill="currentColor"/><circle cx="22" cy="29" r="15" fill="currentColor"/><path d="M13 26q1-7 8-7" fill="none" stroke="#83dfff" stroke-width="3" stroke-linecap="round"/></svg><small>炸弹</small></button></div>
-      <div class="skill-dock"><div id="passive-status"></div><button id="skill-button" data-action="skill">空技能槽</button><button id="swap-button" data-action="swap" hidden></button></div>
+      <div class="desktop-controls" aria-label="键盘操作"><p><b>↑↓←→</b><b>WASD</b>移动</p><p><b>SPACE</b>放炸弹</p><p><b>E</b>技能<b>F</b>替换</p><p><b>Esc</b>暂停</p></div>
+      <div class="mobile-controls"><div class="dpad"><button data-dir="up" aria-label="上">▲</button><button data-dir="left" aria-label="左">◀</button><button data-dir="down" aria-label="下">▼</button><button data-dir="right" aria-label="右">▶</button></div><button class="bomb-button" data-action="bomb" aria-label="放置炸弹"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 13l5-6 5 3-2 5M34 5l2-3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M27 12l9 7-5 6-9-7z" fill="currentColor"/><circle cx="22" cy="29" r="15" fill="currentColor"/><path d="M13 26q1-7 8-7" fill="none" stroke="#83dfff" stroke-width="3" stroke-linecap="round"/></svg><small>炸弹</small></button></div>
+      <div class="skill-dock"><button id="skill-button" data-action="skill">空技能槽</button><button id="swap-button" data-action="swap" hidden></button></div>
+      <div class="spectate-bar" hidden><span class="spectate-eye" aria-hidden="true">👀</span><div><strong>观战中</strong><small id="spectate-note">本局结束后结算</small></div><button class="button button-primary" data-action="spectate-simulate">模拟剩下比赛</button></div>
       <div id="toast" class="game-toast" aria-live="polite"></div>
     </main>`;
 }
@@ -358,7 +426,9 @@ function resultMarkup(): string {
   return `<main class="screen result-screen result-${result}"><div class="result-burst">${result === 'win' ? '✦' : result === 'lose' ? '×' : '•'}</div><p class="eyebrow">本局结束 · ${result === 'win' ? '胜利' : result === 'lose' ? '失利' : '平局'}</p><h1>${copy[0]}</h1><p class="result-copy">${copy[1]}</p><div class="result-actions"><button class="button button-primary button-large" data-action="restart">${matchMode === 'championship' ? '返回赛事签表' : '重新开始'} <span>→</span></button><button class="button button-ghost" data-action="home">返回主菜单</button></div><div class="result-note">无需登录 · 积分保存在本机</div></main>`;
 }
 
-type SegmentedSetting = 'boardStyle' | 'quality' | 'controls' | 'sound' | 'motion';
+type SegmentedSetting = 'boardStyle' | 'matchMinutes' | 'quality' | 'controls' | 'sound' | 'motion';
+const matchMinutes = (): 1 | 2 | 3 => settings.matchMinutes ?? 2;
+const minutesText = (): string => ['', '一', '两', '三'][matchMinutes()] + '分钟';
 
 /** Pill-style segmented control (radiogroup) replacing native selects in settings. */
 function segmented(setting: SegmentedSetting, label: string, current: string, options: Array<[string, string]>): string {
@@ -368,6 +438,7 @@ function segmented(setting: SegmentedSetting, label: string, current: string, op
 
 function applySegmented(setting: SegmentedSetting, value: string): void {
   if (setting === 'boardStyle') settings.boardStyle = value as 'modern' | 'classic';
+  if (setting === 'matchMinutes') settings.matchMinutes = Number(value) as 1 | 2 | 3;
   if (setting === 'quality') settings.quality = value as 'low' | 'high';
   if (setting === 'controls') settings.controls = value as 'auto' | 'touch';
   if (setting === 'motion') settings.reducedMotion = value === 'on';
@@ -400,6 +471,7 @@ function settingsMarkup(): string {
   const link = (action: string, title: string, note: string) => `<button class="setting-row" data-action="${action}"><span><strong>${title}</strong><small>${note}</small></span><b>查看 →</b></button>`;
   const onOff = (setting: SegmentedSetting, label: string, on: boolean) => segmented(setting, label, on ? 'on' : 'off', [['on', '开'], ['off', '关']]);
   const game = `<section class="settings-group" aria-labelledby="sg-game"><h3 id="sg-game" class="settings-group-title">游戏设置</h3>
+    ${row('每局时长', '对新开的对局生效', segmented('matchMinutes', '每局时长', String(matchMinutes()), [['1', '1 分钟'], ['2', '2 分钟'], ['3', '3 分钟']]))}
     ${row('棋盘样式', '立体斜视角，或经典俯视棋盘', segmented('boardStyle', '棋盘样式', settings.boardStyle ?? 'modern', [['modern', '立体'], ['classic', '经典']]))}
     ${row('画质', '流畅模式关闭阴影，适合低性能设备', segmented('quality', '画质', settings.quality, [['high', '精细'], ['low', '流畅']]))}
     ${row('操作方式', '自动识别，或强制显示触控按键', segmented('controls', '操作方式', settings.controls, [['auto', '自动'], ['touch', '触控']]))}
@@ -426,6 +498,10 @@ function wireScreen(): void {
   app.querySelectorAll<HTMLElement>('[data-action]').forEach((element) => element.addEventListener('click', (event) => {
     if (element === bombButton && event.detail > 0) return;
     handleAction(element.dataset.action ?? '');
+  }));
+  app.querySelectorAll<HTMLButtonElement>('[data-champ-difficulty]').forEach((button) => button.addEventListener('click', () => {
+    champDifficulty = button.dataset.champDifficulty as Difficulty;
+    render();
   }));
   app.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((button) => button.addEventListener('click', () => {
     difficulty = button.dataset.difficulty as Difficulty;
@@ -490,14 +566,17 @@ function handleAction(action: string): void {
       if(suspended)handleAction('continue-save');
       else if(competition&&playerEliminated(competition)) autoSimulateTournament();
       else if(competition){screen='tournament';render();window.scrollTo(0,0);}
-      else handleAction('new-tournament');
+      else { champSetup = true; screen = 'tournament'; render(); window.scrollTo(0, 0); }
       break;
     case 'players': screen = 'players'; render(); break;
-    case 'new-tournament': { const start=()=>{ stopGame(); suspended=null;matches.championship=null; competition = createTournament(difficulty); screen = 'tournament'; render(); }; if (competition && competition.round !== 'complete') void showDialog({title:'放弃当前冠军赛？',body:'当前赛事进度会作废，并创建新的 64 人冠军赛。',confirmText:'放弃并新建',danger:true}).then(ok=>{if(ok)start();}); else start(); break; }
+    case 'new-tournament': champDifficulty = competition?.difficulty ?? champDifficulty; champSetup = true; screen = 'tournament'; render(); window.scrollTo(0, 0); break;
+    case 'tournament-setup-cancel': champSetup = false; screen = competition ? 'tournament' : 'home'; render(); window.scrollTo(0, 0); break;
+    case 'tournament-start': { const start=()=>{ stopGame(); suspended=null;matches.championship=null; competition = createTournament(champDifficulty); champSetup = false; persist(); screen = 'tournament'; render(); window.scrollTo(0, 0); }; if (competition && competition.round !== 'complete') void showDialog({title:'放弃当前冠军赛？',body:'当前赛事进度会作废，并按新难度创建 64 人冠军赛。',confirmText:'放弃并新建',danger:true}).then(ok=>{if(ok)start();}); else start(); break; }
     case 'tournament': screen = 'tournament'; render(); break;
     case 'tournament-play': progressTournament(); break;
     case 'tournament-autosim': autoSimulateTournament(); break;
     case 'skill': game?.usePlayerSkill(); break;
+    case 'spectate-simulate': simulateRestAfterKnockout(); break;
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': confirmNewMatch=false; screen = 'setup'; render(); break;
     case 'cancel-new-match': confirmNewMatch=false; render(); break;
@@ -511,7 +590,7 @@ function handleAction(action: string): void {
       startQuickMatch(); break;
     case 'play-confirmed': if(screen==='setup'&&confirmNewMatch)startQuickMatch(); break;
     case 'random-map': selectedMap = maps[Math.floor(Math.random() * maps.length)].id; render(); break;
-    case 'home': stopGame(); trial=false; screen = 'home'; render(); window.scrollTo(0,0);break;
+    case 'home': stopGame(); trial=false; champSetup=false; screen = 'home'; render(); window.scrollTo(0,0);break;
     case 'overview': guideBack='home'; screen='howto'; render(); window.scrollTo(0,0); break;
     case 'howto': guideBack='settings'; screen='howto'; render(); window.scrollTo(0,0); break;
     case 'settings': screen = 'settings'; render(); break;
@@ -529,7 +608,7 @@ function handleAction(action: string): void {
         screen = 'game';
         render();
       } else if (game) {
-        game.start(difficulty, selectedMap, opponents);
+        game.start(difficulty, selectedMap, opponents, { duration: matchMinutes() * 60 });
         applyPreferences();
         startNewRound = false;
         screen = 'game';
@@ -585,7 +664,7 @@ function mountGame(): void {
   }
   if(restoring && suspended){game.restore(suspended.snapshot);restoring=false;startNewRound=false;resizeGame();requestAnimationFrame(()=>showPauseOverlay());}
   else if (startNewRound) {
-    game.start(difficulty, selectedMap, opponents, {practice:trial});
+    game.start(difficulty, selectedMap, opponents, { practice: trial, duration: matchMinutes() * 60 });
     if (!trial && matchMode === 'championship' && competition && competition.round !== 'first' && !replaying) {
       if (competition.bonus) game.grantBonus('player', competition.bonus);
       opponents.forEach(p => game?.grantBonus(p.id, p.personality === 'careful' ? 'shield' : p.personality === 'collector' ? 'capacity' : 'speed'));
@@ -646,7 +725,11 @@ function updateHud(): void {
     skillButton.classList.toggle('armed', skills.armed);
   }
   const passives = app.querySelector('#passive-status');
-  if (passives) passives.textContent = [skills.shield ? '◈ 护盾' : '', skills.life ? '♥ 复活 ×1' : '', skills.invincible > 0 ? `无敌 ${skills.invincible.toFixed(1)}s` : '', skills.dash > 0 ? `疾跑 ${skills.dash.toFixed(1)}s` : '', skills.rapid > 0 ? `连发 ${skills.rapid.toFixed(1)}s` : '', skills.respawning ? '等待安全复活' : ''].filter(Boolean).join(' · ');
+  if (passives) {
+    const pill = (kind: Reward, label: string, color: string) => `<span class="passive-pill" data-passive="${kind}" style="--pill:${color}">${rewardIcon(kind)}${label}</span>`;
+    const markup = [skills.shield ? pill('shield', '护盾', '#2fbf68') : '', skills.life > 0 ? pill('life', `复活 ×${skills.life}`, '#f2547f') : '', skills.invincible > 0 ? pill('invincible', `${skills.invincible.toFixed(1)}s`, '#9375da') : '', skills.dash > 0 ? pill('dash', `${skills.dash.toFixed(1)}s`, '#e39a00') : '', skills.rapid > 0 ? pill('rapid', `${skills.rapid.toFixed(1)}s`, '#e56746') : '', skills.respawning ? '<span class="passive-pill">等待安全复活</span>' : ''].join('');
+    if (passives.innerHTML !== markup) passives.innerHTML = markup;
+  }
   const swapButton = app.querySelector<HTMLButtonElement>('#swap-button');
   if (swapButton) {
     swapButton.hidden = false;
@@ -657,7 +740,7 @@ function updateHud(): void {
   }
   const timer = document.querySelector<HTMLElement>('#timer');
   const base = game.getPlayerStats();
-  for (const [id, value] of Object.entries({ 'base-capacity':String(base.maxBombs), 'base-available':`可放 ${Math.max(0,base.maxBombs-base.bombs)}`, 'base-range':`${base.range} 格`, 'base-speed':`${Math.round(base.speed*100)}%` })) {
+  for (const [id, value] of Object.entries({ 'base-capacity':`${Math.max(0,base.maxBombs-base.bombs)}/${base.maxBombs}`, 'base-range':`${base.range} 格`, 'base-speed':`${Math.round(base.speed*100)}%` })) {
     const element = app.querySelector<HTMLElement>(`#${id}`);
     if (element && element.textContent !== value) element.textContent = value;
   }
@@ -668,22 +751,41 @@ function updateHud(): void {
   const scoreboard = app.querySelector<HTMLElement>('#match-scores');
   if (scoreboard) {
     const standings = game.getStandings();
+    const colors = game.getActorColors();
+    const compact = scoreboard.clientWidth < 460;
     for (const actor of standings) {
       let card = Array.from(scoreboard.children).find(node => (node as HTMLElement).dataset.actor === actor.id) as HTMLElement | undefined;
       if (!card) {
         card = document.createElement('div');
         card.dataset.actor = actor.id;
         card.className = 'match-score';
-        card.append(document.createElement('span'), document.createElement('strong'));
+        card.innerHTML = '<i class="score-dot" aria-hidden="true"></i><span class="score-name"></span><em class="score-tag">淘汰</em><strong></strong>';
         scoreboard.append(card);
       }
       card.classList.toggle('is-out', !actor.alive);
       card.classList.toggle('is-you', actor.id === 'player');
-      card.children[0].textContent = actor.name;
-      card.dataset.short = actor.id === 'player' ? '你' : actor.name.split('·')[0].slice(0, 3);
-      card.children[1].textContent = String(actor.score);
+      card.style.setProperty('--dot', colors[actor.id] ?? '#9fb3c6');
+      const name = actor.id === 'player' ? '你' : compact ? actor.name.split('·')[0].slice(0, 4) : actor.name;
+      const nameEl = card.querySelector('.score-name')!, scoreEl = card.querySelector('strong')!;
+      if (nameEl.textContent !== name) nameEl.textContent = name;
+      if (scoreEl.textContent !== String(actor.score)) scoreEl.textContent = String(actor.score);
       card.title = `${actor.name}：${actor.score} 分${actor.alive ? '' : ' · 已淘汰'}`;
     }
+  }
+  const screenEl = app.querySelector<HTMLElement>('.game-screen');
+  if (screenEl && screenEl.classList.contains('layout-touch') !== touchLayout()) { screenEl.classList.toggle('layout-touch', touchLayout()); resizeGame(); }
+  const spectating = !trial && !game.getPlayerStats().alive && !game.getResult();
+  if (screenEl && screenEl.classList.contains('is-spectating') !== spectating) {
+    screenEl.classList.toggle('is-spectating', spectating);
+    const bar = screenEl.querySelector<HTMLElement>('.spectate-bar');
+    if (bar) bar.hidden = !spectating;
+    screenEl.querySelectorAll<HTMLButtonElement>('.mobile-controls button, .skill-dock button').forEach(b => { if (spectating) b.disabled = true; else if (!b.matches('.skill-dock button')) b.disabled = false; });
+  }
+  if (spectating) {
+    const note = app.querySelector<HTMLElement>('#spectate-note');
+    const left = game.getStandings().filter(a => a.alive).length;
+    const text = `剩余 ${left} 名选手 · ${matchMode === 'championship' ? '模拟会跑完整届冠军赛' : '本局结束后结算'}`;
+    if (note && note.textContent !== text) note.textContent = text;
   }
   const toast = document.querySelector<HTMLElement>('#toast');
   if (toast && toastTimer > 0) {
@@ -697,8 +799,8 @@ function handleGameEvent(event: GameEvent): void {
   if (event.type === 'bomb-placed') audio.play('place');
   if (event.type === 'explosion') audio.play('blast');
   if (event.type === 'item-picked') {
-    if (event.actorId === 'player' && !event.capped) audio.play(event.item === 'coin' ? 'coin' : event.item === 'life' ? 'life' : isActive(event.item) ? 'pickup' : 'growth');
-    showPickup(app, event.item, game?.getActorScreenPoint(event.actorId) ?? null, event.capped, event.replaced, event.actorId === 'player');
+    if (event.actorId === 'player' && !event.capped) audio.play(({ score: 'coin', growth: 'growth', protect: 'life', active: 'pickup' } as const)[pickupFamily(event.item)]);
+    showPickup(app, event.item, game?.getActorScreenPoint(event.actorId) ?? null, event.capped, event.replaced, event.actorId === 'player', event.lives);
   }
   if (event.type === 'round-over') {
     if (!trial && matchMode === 'quick' && game) settleQuick(career, quickId, difficulty, game.getStandings());

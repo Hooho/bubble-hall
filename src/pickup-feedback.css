@@ -1,11 +1,50 @@
-.pickup-particle{position:fixed;z-index:12;pointer-events:none;display:flex;align-items:center;gap:3px;transform:translate(-50%,-50%);color:var(--pickup-color);filter:drop-shadow(0 0 7px var(--pickup-color))}
-.pickup-particle .reward-icon{width:30px;height:30px}.pickup-particle b{font-size:22px;font-weight:900;text-shadow:0 2px white,1px 0 white,-1px 0 white}
-.pickup-banner{position:absolute;right:0;bottom:calc(100% + 10px);width:210px;max-width:calc(100vw - 28px);display:flex;align-items:center;gap:8px;padding:10px 12px;border:2px solid var(--pickup-color);border-radius:17px;background:linear-gradient(135deg,#fff,#edf9ff);box-shadow:0 4px 0 #bed8e9,0 0 16px color-mix(in srgb,var(--pickup-color) 30%,transparent);pointer-events:none;animation:pickup-arrive 180ms ease-out;color:#164b73}
-.pickup-banner::after{content:'';position:absolute;bottom:-7px;right:28px;width:10px;height:10px;background:#edf9ff;border-right:2px solid var(--pickup-color);border-bottom:2px solid var(--pickup-color);transform:rotate(45deg)}
-.pickup-banner strong{display:block;font-size:13px}.pickup-banner small{display:block;font-size:10px;margin-top:3px}.pickup-banner .reward-icon{flex-shrink:0;width:32px!important;height:32px!important}
-.skill-dock:has(.pickup-banner) #passive-status{visibility:hidden}
-.pickup-ring{position:fixed;z-index:11;pointer-events:none;width:30px;height:14px;border:2px solid var(--pickup-color);border-radius:50%;box-shadow:0 0 10px var(--pickup-color);animation:pickup-ring 650ms ease-out forwards}
-.pickup-glint{position:fixed;z-index:11;pointer-events:none;width:7px;height:7px;background:var(--pickup-color);border-radius:50%;box-shadow:0 0 9px var(--pickup-color)}
-@keyframes pickup-ring{from{transform:translate(-50%,-50%) scale(.5);opacity:.9}to{transform:translate(-50%,-50%) scale(2.3);opacity:0}}
+/* ---------- shared ---------- */
+.pickup-particle{position:fixed;z-index:12;pointer-events:none;display:flex;align-items:center;gap:4px;transform:translate(-50%,-50%);color:var(--pickup-color);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--pickup-color) 70%,transparent))}
+.pickup-particle .reward-icon{width:32px;height:32px}
+.pickup-particle b{font-size:20px;font-weight:950;white-space:nowrap;text-shadow:0 2px 0 #fff,2px 0 0 #fff,-2px 0 0 #fff,0 -2px 0 #fff}
+.pickup-glint{position:fixed;z-index:11;pointer-events:none;width:8px;height:8px;background:var(--pickup-color);border-radius:50%;box-shadow:0 0 10px var(--pickup-color),0 0 0 2px #fff}
+.pickup-other{filter:none;opacity:.85}.pickup-other .reward-icon{width:24px;height:24px}
+
+/* ---------- score: coin ---------- */
+.pickup-player-coin b{color:#e39a12}
+
+/* ---------- growth: chip bump ---------- */
+.pickup-growth b{font-size:17px;color:#1d9a4e}
+.pickup-growth.is-capped b{color:#8a9aaa}
+.base-attributes>div{transition:transform .2s}
+.base-attributes>div.attr-bump{animation:attr-bump .9s cubic-bezier(.3,.7,.3,1.4) .45s both}
+.base-attributes>div.attr-capped{animation:attr-shake .45s ease-in-out .2s both}
+.attr-plus{position:fixed;z-index:12;pointer-events:none;padding:1px 7px;border-radius:999px;background:#2fbf68;color:#fff;font-size:12px;font-weight:900;box-shadow:0 2px 0 #1d8a49}
+@keyframes attr-bump{0%{transform:scale(1)}30%{transform:scale(1.18);border-color:var(--pickup-color);box-shadow:0 0 0 3px color-mix(in srgb,var(--pickup-color) 35%,transparent),0 2px 0 #c4dbea;background:#fff}100%{transform:scale(1)}}
+@keyframes attr-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+
+/* ---------- protect: shockwave + pill ---------- */
+.pickup-protect .reward-icon{width:38px;height:38px}
+.pickup-shockwave{position:fixed;z-index:11;pointer-events:none;width:36px;height:36px;border:3px solid var(--pickup-color);border-radius:50%;box-shadow:0 0 12px var(--pickup-color),inset 0 0 8px var(--pickup-color);transform:translate(-50%,-50%) scale(.4);opacity:0;animation:pickup-shockwave .8s ease-out both}
+@keyframes pickup-shockwave{0%{transform:translate(-50%,-50%) scale(.4);opacity:1}100%{transform:translate(-50%,-50%) scale(2.6);opacity:0}}
+.board-stage{position:relative}.board-stage:has(.pickup-protect-pill) #passive-status{visibility:hidden}
+.pickup-protect-pill{position:absolute;z-index:6;left:50%;display:flex;align-items:center;gap:6px;height:32px;padding:0 12px 0 5px;border:2px solid var(--pickup-color);border-radius:999px;background:#fff;box-shadow:0 3px 0 color-mix(in srgb,var(--pickup-color) 40%,#c9dbe8),0 6px 16px #1a4a7a1f;transform:translate(-50%,-50%);pointer-events:none;animation:protect-pill 2.3s cubic-bezier(.3,.7,.3,1.2) both;white-space:nowrap}
+.pickup-protect-pill .reward-icon{width:24px!important;height:24px!important;flex-shrink:0}
+.pickup-protect-pill strong{font-size:13px;font-weight:900;color:var(--pickup-color)}
+.pickup-protect-pill small{font-size:11px;font-weight:700;color:#6f8aa3}
+.pickup-protect-pill.is-capped{border-color:#b9c7d4}.pickup-protect-pill.is-capped strong{color:#6c85a0}
+.life-pips{display:flex;gap:3px;margin-left:2px}
+.life-pips i{width:9px;height:9px;border-radius:50%;background:#e7eef5;box-shadow:inset 0 0 0 1.5px #c9d7e4}
+.life-pips i.on{background:var(--pickup-color);box-shadow:inset 0 -2px 0 #0002,0 0 0 1.5px #fff}
+.life-pips i.new{animation:life-pip .55s cubic-bezier(.3,.7,.3,1.6) .35s both}
+@keyframes life-pip{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes protect-pill{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}18%,85%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.94)}}
+
+/* ---------- active: arc into slot, burst, bubble ---------- */
+.pickup-active .reward-icon{width:36px;height:36px}
+.pickup-burst{position:fixed;z-index:12;pointer-events:none;width:0;height:0}
+.pickup-burst i{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:2px;background:var(--pickup-color);box-shadow:0 0 6px var(--pickup-color);animation:pickup-burst .7s cubic-bezier(.2,.7,.3,1) both}
+.pickup-burst i:nth-child(1){--a:0deg}.pickup-burst i:nth-child(2){--a:45deg}.pickup-burst i:nth-child(3){--a:90deg}.pickup-burst i:nth-child(4){--a:135deg}.pickup-burst i:nth-child(5){--a:180deg}.pickup-burst i:nth-child(6){--a:225deg}.pickup-burst i:nth-child(7){--a:270deg}.pickup-burst i:nth-child(8){--a:315deg}
+@keyframes pickup-burst{0%{transform:rotate(var(--a)) translateX(0) scale(1);opacity:1}100%{transform:rotate(var(--a)) translateX(46px) scale(.3);opacity:0}}
+.pickup-banner{position:absolute;right:0;bottom:calc(100% + 10px);width:230px;max-width:calc(100vw - 28px);display:flex;align-items:center;gap:8px;padding:10px 12px;border:2px solid var(--pickup-color);border-radius:17px;background:linear-gradient(135deg,#fff,#f4f9ff);box-shadow:0 4px 0 color-mix(in srgb,var(--pickup-color) 40%,#bed8e9),0 0 18px color-mix(in srgb,var(--pickup-color) 30%,transparent);animation:pickup-arrive .3s cubic-bezier(.3,.7,.3,1.3) .7s both;pointer-events:none}
+.pickup-banner::after{content:'';position:absolute;bottom:-7px;right:var(--tail-right,28px);width:10px;height:10px;background:#f4f9ff;border-right:2px solid var(--pickup-color);border-bottom:2px solid var(--pickup-color);transform:rotate(45deg)}
+.pickup-banner strong{display:block;font-size:13px;color:var(--pickup-color)}.pickup-banner small{display:block;font-size:10px;margin-top:3px;color:#617f99}.pickup-banner .reward-icon{flex-shrink:0;width:32px!important;height:32px!important}
 @keyframes pickup-arrive{from{opacity:0;transform:translateY(8px) scale(.94)}to{opacity:1;transform:none}}
-@media(prefers-reduced-motion:reduce){.pickup-banner{animation:none}}
+
+@media(prefers-reduced-motion:reduce){.pickup-banner,.pickup-protect-pill,.life-pips i.new,.base-attributes>div.attr-bump,.base-attributes>div.attr-capped,.pickup-shockwave,.pickup-burst i{animation:none}}
+.reduce-motion .pickup-banner,.reduce-motion .pickup-protect-pill,.reduce-motion .life-pips i.new,.reduce-motion .base-attributes>div.attr-bump,.reduce-motion .base-attributes>div.attr-capped{animation:none}

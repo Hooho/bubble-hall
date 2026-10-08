@@ -73,7 +73,7 @@ const richSnapshot={
     position:{x:1+i*2,y:1},spawn:{x:1+i*2,y:1},score:100+i,hits:1,crates:2,
     bombCapacity:3,bombsActive:i===0?1:0,range:4,speed:1.2,respawnDelay:0,
     moveCooldown:0.1,decisionCooldown:0.2,state:'escape',plannedPath:[{x:2,y:1}],blockedMoves:0,
-    skills:{...newSkills(),active:'super',shield:true,invincible:1.2},
+    skills:{...newSkills(),active:'super',shield:true,life:i===0?2:0,invincible:1.2},
   })),
   bombs:[{id:2,ownerId:'player',position:{x:2,y:1},timer:1.1,range:4,piercing:true}],
   items:[{kind:'coin',position:{x:4,y:3}},{kind:'life',position:{x:5,y:3}}],
@@ -86,6 +86,20 @@ progress.tournament=createTournament('hard');
 progress.matches={quick:{id:'quick-unfinished',mode:'quick',snapshot:richSnapshot},championship:{id:'champ-unfinished',mode:'championship',snapshot:{...richSnapshot,remaining:65,elapsed:55}}};
 progress.active=progress.matches.championship;
 assert.ok(validateSave(progress));
+// Removed map (古韵庭院): an unfinished match saved on it still loads, falling back to 蓝湾广场.
+const retired=structuredClone(progress); retired.matches.quick.snapshot.mapId='palace';
+assert.ok(validateSave(retired)); assert.equal(retired.matches.quick.snapshot.mapId,'bay');
+// Extra life used to be a boolean: older saves load as a count; stacked counts survive; out-of-range counts are rejected.
+const legacyLife=structuredClone(progress); legacyLife.matches.quick.snapshot.actors[0].skills.life=true; legacyLife.matches.quick.snapshot.actors[1].skills.life=false;
+assert.ok(validateSave(legacyLife)); assert.equal(legacyLife.matches.quick.snapshot.actors[0].skills.life,1); assert.equal(legacyLife.matches.quick.snapshot.actors[1].skills.life,0);
+const stacked=structuredClone(progress); stacked.matches.quick.snapshot.actors[0].skills.life=3; assert.ok(validateSave(stacked));
+// Selectable round length: snapshot keeps its own duration; settings accept 1-3 minutes only.
+const long=structuredClone(progress); long.matches.quick.snapshot.duration=180; assert.ok(validateSave(long));
+const odd=structuredClone(progress); odd.matches.quick.snapshot.duration=90; assert.equal(validateSave(odd),false);
+const mins=structuredClone(progress); mins.settings.matchMinutes=3; assert.ok(validateSave(mins));
+const badMins=structuredClone(progress); badMins.settings.matchMinutes=5; assert.equal(validateSave(badMins),false);
+const tooMany=structuredClone(progress); tooMany.matches.quick.snapshot.actors[0].skills.life=4; assert.equal(validateSave(tooMany),false);
+const fractional=structuredClone(progress); fractional.matches.quick.snapshot.actors[0].skills.life=1.5; assert.equal(validateSave(fractional),false);
 const packed=store.transfer.exportJSON(progress);
 assert.deepEqual(store.transfer.parseJSON(packed),progress);
 const code=await store.transfer.createCode(progress);

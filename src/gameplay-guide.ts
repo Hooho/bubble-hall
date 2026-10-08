@@ -6,7 +6,7 @@ export function gameplayGuideMarkup(back: 'home' | 'settings'): string {
   return `<main class="screen gameplay-guide">
     <header class="topline"><button class="icon-button" data-action="${back}" aria-label="返回${back==='home'?'大厅':'设置'}">←</button><span class="screen-kicker">${back==='home'?'大厅':'设置'}</span></header>
     <div class="playbook-content">
-      <header class="playbook-intro"><h1>玩法一览</h1><p class="page-sub"><strong>2 分钟</strong>一局：活到最后，或到时争最高分。</p></header>
+      <header class="playbook-intro"><h1>玩法一览</h1><p class="page-sub"><strong>每局 2 分钟</strong>（可在设置里改为 1 或 3 分钟）：活到最后，或到时争最高分。</p></header>
       <nav class="playbook-nav" aria-label="玩法章节"><a href="#guide-field">战场元素</a><a href="#guide-score">积分机制</a><a href="#guide-match">比赛机制</a><a href="#guide-items">道具图鉴</a></nav>
       <section id="guide-field" class="playbook-section"><h2><span>01</span> 战场元素</h2><div class="field-cards">
         <article class="field-card"><div class="field-art"><i class="guide-bomb"></i></div><h3>炸弹 <small>放下后快离开</small></h3><p><strong>2 秒爆炸</strong> · 放弹间隔 <strong>0.35 秒</strong>。<br>初始容量 1 颗、四向范围 2 格。连锁会提前引爆。</p></article>

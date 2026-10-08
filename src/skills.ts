@@ -6,4 +6,6 @@ export const rewardNames: Record<Reward, string> = {
   invincible: '无敌泡泡', super: '超级炸弹', dash: '疾跑', rapid: '连发模式',
 };
 export const isActive = (kind: Reward): kind is ActiveSkill => ['invincible', 'super', 'dash', 'rapid'].includes(kind);
-export const newSkills = () => ({ active: null as ActiveSkill | null, armed: false, shield: false, life: false, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });
+/** Extra lives stack up to this many; each knockout consumes one. */
+export const MAX_LIVES = 3;
+export const newSkills = () => ({ active: null as ActiveSkill | null, armed: false, shield: false, life: 0, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });

@@ -27,6 +27,10 @@ for (const [remaining, elapsed, expected] of [[180,0,120],[150,30,90],[40,140,0]
   restored.restore({ actors: [], bombs: [], items: [], tiles: [], remaining, elapsed });
   assert.equal(restored.remaining, expected, 'resume preserves elapsed time under the new limit');
 }
+restored.restore({ actors: [], bombs: [], items: [], tiles: [], remaining: 170, elapsed: 10, duration: 180 });
+assert.equal(restored.remaining, 170, 'a 3-minute match resumes with its own limit');
+restored.restore({ actors: [], bombs: [], items: [], tiles: [], remaining: 170, elapsed: 10, duration: 60 });
+assert.equal(restored.remaining, 50, 'a 1-minute match never resumes past its limit');
 console.log('PASS: two-minute match limit and legacy countdown migration');
 const practice = Object.create(GameEngine.prototype);
 Object.assign(practice,{practice:true,result:null,remaining:119,actors:new Map([['player',{id:'player',alive:true}]]),listeners:new Set(),running:true});
@@ -40,7 +44,7 @@ console.log('PASS: solo trial continues until timeout or death; normal eliminati
 const frameClock=Object.create(GameEngine.prototype);
 Object.assign(frameClock,{running:true,elapsed:0,remaining:120,coinTimer:5,result:null,updateActors(){},updateBombs(){},updateEffects(){},updateMeshes(){}});
 frameClock.update(-0.001);assert.equal(frameClock.remaining,120);assert.equal(frameClock.elapsed,0);
-const fresh = () => ({ active: null, armed: false, shield: false, life: false, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });
+const fresh = () => ({ active: null, armed: false, shield: false, life: 0, invincible: 0, dash: 0, rapid: 0, bombCooldown: 0, respawning: false });
 const actor = { id: 'player', alive: true, skills: fresh(), position: { x: 1, y: 1 }, bombCapacity: 1, range: 2, speed: 1 };
 engine.listeners = new Set();
 const pickupEvents = [];
@@ -65,8 +69,10 @@ for (const kind of ['bomb', 'flame', 'speed', 'shield', 'life']) {
   for (let i = 0; i < 10; i++) { engine.items = [{ position: { ...actor.position }, kind }]; engine.collectItem(actor); }
 }
 assert.equal(actor.bombCapacity, 5); assert.equal(actor.range, 5); assert.equal(actor.speed, 1.3);
-assert.equal(actor.skills.shield, true); assert.equal(actor.skills.life, true);
-assert.equal(pickupEvents.at(-1).capped, true, 'duplicate life must not claim an upgrade');
+assert.equal(actor.skills.shield, true); assert.equal(actor.skills.life, 3, 'extra lives stack up to the cap');
+const lifeEvents = pickupEvents.filter(event => event.item === 'life');
+assert.deepEqual(lifeEvents.slice(0, 4).map(event => [event.capped, event.lives]), [[false, 1], [false, 2], [false, 3], [true, 3]], 'each life pickup reports the new total; only a pickup at the cap is capped');
+assert.equal(pickupEvents.at(-1).capped, true, 'life beyond the cap must not claim an upgrade');
 assert.ok(pickupEvents.some(event => event.item === 'bomb' && !event.capped));
 assert.ok(pickupEvents.some(event => event.item === 'bomb' && event.capped));
 engine.tiles = Array.from({ length: 11 }, () => Array(13).fill('floor'));
@@ -96,11 +102,12 @@ const hit = () => {
   const bomb = { id: 1, ownerId: 'player', position: { ...actor.position }, range: 0 };
   engine.bombs = [bomb]; engine.explodeBomb(bomb);
 };
-actor.skills = fresh(); actor.skills.invincible = 3; actor.skills.shield = true; actor.skills.life = true;
-hit(); assert.equal(actor.skills.shield, true); assert.equal(actor.skills.life, true);
-actor.skills.invincible = 0; hit(); assert.equal(actor.skills.shield, false); assert.equal(actor.skills.life, true);
-hit(); assert.equal(actor.skills.life, true, 'same chain cannot consume extra life after shield');
-actor.skills.invincible = 0; hit(); assert.equal(actor.skills.respawning, true); assert.equal(actor.alive, true);
+actor.skills = fresh(); actor.skills.invincible = 3; actor.skills.shield = true; actor.skills.life = 2;
+hit(); assert.equal(actor.skills.shield, true); assert.equal(actor.skills.life, 2);
+actor.skills.invincible = 0; hit(); assert.equal(actor.skills.shield, false); assert.equal(actor.skills.life, 2);
+hit(); assert.equal(actor.skills.life, 2, 'same chain cannot consume extra life after shield');
+actor.skills.invincible = 0; hit(); assert.equal(actor.skills.respawning, true); assert.equal(actor.alive, true); assert.equal(actor.skills.life, 1, 'a knockout consumes exactly one life');
+actor.skills.respawning = false; hit(); assert.equal(actor.skills.respawning, true); assert.equal(actor.alive, true); assert.equal(actor.skills.life, 0, 'second stacked life revives again');
 actor.skills.respawning = false; hit(); assert.equal(actor.alive, false); assert.equal(actor.skills.respawning, false);
 actor.alive = true; actor.skills = fresh(); actor.skills.active = 'super'; actor.skills.armed = true; actor.bombsActive = actor.bombCapacity;
 assert.equal(engine.placeBomb(actor), false); assert.equal(actor.skills.active, 'super'); assert.equal(actor.skills.armed, true);

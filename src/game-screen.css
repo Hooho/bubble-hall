@@ -1,0 +1,294 @@
+/*
+ * In-match screen — the single source of truth for the game screen.
+ *
+ * Three layouts:
+ *   desktop          .game-screen                 (keyboard; skill dock bottom-right)
+ *   touch portrait   .game-screen.layout-touch     (portrait: controls deck at the bottom)
+ *   touch landscape  .game-screen.layout-touch     (landscape: scores left, controls in the side columns)
+ * `.layout-touch` is set from JS: narrow screen, coarse pointer, or 设置 → 操作方式 → 触控.
+ *
+ * Tokens: gutter 12px · radius 14 / 20px · one 3px lip · type 11 / 13 / 16 / 24px ·
+ * two button families: primary (glossy blue: move, bomb) and secondary (white card: skill, swap, pause, restart).
+ */
+
+.game-screen {
+  --g: 12px;
+  --r-s: 14px;
+  --r-l: 20px;
+  --line: #d6e6f3;
+  --lip: 0 3px 0 #c9dcec;
+  --ink: #1d3f63;
+  --muted: #6f8aa3;
+  --brand: #1f84f2;
+  --f-xs: 11px;
+  --f-s: 13px;
+  --f-m: 16px;
+  --f-l: 24px;
+  --safe-b: max(14px, env(safe-area-inset-bottom));
+  --topbar-h: 64px;
+  --attr-h: 40px;
+  --passive-h: 34px;
+  --board-ratio: 1.3;           /* board width / height */
+  --deck: 24px;                 /* space reserved under the board for fixed controls */
+  --side: 0px;                  /* space reserved left/right of the board */
+
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: radial-gradient(ellipse at 50% 42%, #f6fbff, #e2eef9);
+}
+.game-screen::before { opacity: .1; }
+
+/* no text selection / callouts while playing */
+.game-screen, .game-screen * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.game-screen img { -webkit-user-drag: none; }
+.game-screen button:focus-visible { outline: 3px solid #f7ae35; outline-offset: 3px; }
+
+/* ---------------- top bar: three equal columns, clock always centred ---------------- */
+.game-screen .game-topbar {
+  position: relative; z-index: 2; flex: 0 0 var(--topbar-h);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
+  padding: max(6px, env(safe-area-inset-top)) max(var(--g), env(safe-area-inset-right)) 6px max(var(--g), env(safe-area-inset-left));
+  background: transparent; border: 0;
+}
+.game-screen .match-id { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.game-screen .mode-chip { max-width: 100%; padding: 1px 8px; border-radius: 99px; background: #e3f0fd; color: var(--brand); font-size: var(--f-xs); font-weight: 800; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-screen .match-id strong { max-width: 100%; font-size: var(--f-s); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-screen .round-clock { display: block; padding: 3px 18px; border: 1.5px solid var(--line); border-radius: var(--r-s); background: #fff; box-shadow: var(--lip); }
+.game-screen .round-clock strong { display: block; color: var(--ink); font-size: var(--f-l); font-weight: 900; line-height: 32px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.game-screen .game-actions { justify-self: end; display: flex; gap: 8px; }
+.game-screen .mini-action {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border: 1.5px solid var(--line); border-radius: var(--r-s); background: #fff; box-shadow: var(--lip);
+  color: var(--ink); font-size: var(--f-m); font-weight: 900;
+}
+.game-screen .mini-action:hover { background: #f1f8ff; border-color: #b9d6ee; }
+.game-screen .mini-action:active { transform: translateY(2px); box-shadow: 0 1px 0 #c9dcec; }
+
+/* ---------------- layout: scores row + board stage ---------------- */
+.game-screen .game-layout {
+  flex: 1; min-height: 0; width: 100%;
+  display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+  padding: 0 max(var(--g), env(safe-area-inset-right)) var(--deck) max(var(--g), env(safe-area-inset-left));
+}
+
+/* scores */
+.game-screen .match-scores { flex: 0 0 auto; display: flex; gap: 6px; width: min(100%, 640px); margin: 0 auto; min-width: 0; }
+.game-screen .match-scores:has(> .match-score:only-child) { justify-content: center; }
+.game-screen .match-score:only-child { flex: 0 1 220px; }
+.game-screen .match-score {
+  position: relative; flex: 1 1 0; min-width: 0;
+  display: flex; align-items: center; gap: 5px; padding: 7px 9px;
+  border: 1.5px solid var(--line); border-radius: 12px; background: #fff;
+  color: var(--ink); font-size: var(--f-xs); font-weight: 700;
+}
+.game-screen .score-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--dot, #9fb3c6); box-shadow: 0 0 0 2px #fff, 0 0 0 3px #0000001a; }
+.game-screen .score-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-screen .match-score strong { flex: none; font-size: var(--f-s); font-weight: 900; font-variant-numeric: tabular-nums; }
+.game-screen .match-score.is-you { border-color: #7cbcf5; background: #eef6ff; color: #1468b6; }
+.game-screen .score-tag { display: none; position: absolute; top: -8px; right: -3px; padding: 0 5px; border-radius: 6px; background: #8c9bab; color: #fff; font-size: 10px; font-style: normal; font-weight: 800; line-height: 15px; }
+.game-screen .match-score.is-out { border-color: #e0e7ee; background: #eef2f6; color: #93a2b0; }
+.game-screen .match-score.is-out .score-name { text-decoration: line-through; }
+.game-screen .match-score.is-out .score-dot { filter: grayscale(1); opacity: .5; }
+.game-screen .match-score.is-out .score-tag { display: block; }
+
+/* board stage: board + attribute bar are one card, centred in the remaining space */
+.game-screen .board-stage {
+  flex: 1; min-height: 0; container-type: size;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+/* spare height: a little above the board, more between it and the controls */
+.game-screen .board-stage::before, .game-screen .board-stage::after { content: ''; flex: 2 1 0; }
+.game-screen .board-stage::before { flex-grow: 1; }
+.game-screen .board-card, .game-screen #passive-status { flex: none; }
+.game-screen .board-card {
+  width: min(calc(100cqw - var(--side) * 2), calc((100cqh - var(--attr-h) - var(--passive-h) - 6px) * var(--board-ratio)));
+  border: 3px solid #fff; border-radius: var(--r-l); background: #fff; box-shadow: var(--lip), 0 14px 30px #2a5f8f14;
+  overflow: hidden;
+}
+.game-screen .board-wrap { position: relative; width: 100%; aspect-ratio: var(--board-ratio); background: #cfe3ef; }
+.game-screen .board-wrap canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; border-radius: 0; background: transparent; }
+
+/* base attributes: equal thirds */
+.game-screen .base-attributes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: calc(var(--attr-h) - 3px); border-top: 1px solid #eef3f8; color: var(--muted); }
+.game-screen .base-attributes > div { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; padding: 0 4px; font-size: var(--f-xs); font-weight: 700; white-space: nowrap; transition: transform .2s; }
+.game-screen .base-attributes > div + div { border-left: 1px solid #eef3f8; }
+.game-screen .base-attributes .reward-icon { width: 22px; height: 22px; flex-shrink: 0; }
+.game-screen .base-attributes b { color: var(--ink); font-size: var(--f-s); font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* passive effects row (shield / lives / timers) */
+.game-screen #passive-status { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px; width: 100%; height: var(--passive-h); padding-top: 8px; overflow: hidden; background: none; border-radius: 0; line-height: 1; }
+.game-screen #passive-status .passive-pill { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 4px; border-radius: 99px; background: #fff; border: 1.5px solid var(--pill, var(--line)); color: var(--pill, var(--ink)); font-size: var(--f-xs); font-weight: 800; white-space: nowrap; }
+.game-screen #passive-status .passive-pill .reward-icon { width: 18px !important; height: 18px !important; }
+
+/* ---------------- controls ---------------- */
+.game-screen .mobile-controls { display: none; }
+
+/* secondary buttons: skill / swap */
+.game-screen .skill-dock { position: fixed; z-index: 5; right: max(24px, env(safe-area-inset-right)); bottom: 24px; display: flex; gap: 10px; }
+.game-screen .skill-dock button {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  width: 72px; height: 64px; min-height: 0; padding: 4px;
+  border: 1.5px solid var(--line); border-radius: var(--r-s); background: #fff; box-shadow: var(--lip);
+  color: var(--ink); font-size: var(--f-xs); font-weight: 800; touch-action: manipulation;
+}
+.game-screen .skill-dock button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #c9dcec; }
+.game-screen .skill-dock button:disabled { border-style: dashed; border-color: #cfdbe6; background: #f1f5f9; color: #a5b3c0; box-shadow: none; }
+.game-screen .skill-dock button.armed { border-color: #f0b24a; background: linear-gradient(#fff4bc, #ffc86b); color: #8b5418; box-shadow: 0 3px 0 #d9952f; }
+.game-screen .skill-dock button > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-screen .skill-dock .reward-icon { width: 28px; height: 28px; }
+.game-screen .empty-skill-icon, .game-screen .swap-skill-icon { font-size: 22px; line-height: 26px; font-weight: 900; }
+.game-screen .skill-dock kbd { position: absolute; top: 3px; right: 5px; font-size: 9px; font-family: inherit; color: #8aa1b6; }
+.game-screen #swap-button[hidden] { display: none; }
+
+/* keyboard hints (desktop) */
+.game-screen .desktop-controls {
+  position: fixed; z-index: 4; left: max(24px, env(safe-area-inset-left)); bottom: 24px; transform: none;
+  display: grid; gap: 6px; padding: 0; color: var(--muted); font-size: var(--f-xs); font-weight: 700; letter-spacing: 0; text-transform: none; white-space: nowrap;
+}
+.game-screen .desktop-controls p { margin: 0; display: flex; align-items: center; gap: 5px; }
+.game-screen .desktop-controls b { min-width: 22px; padding: 2px 6px; border: 1.5px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); font-size: 10px; text-align: center; box-shadow: 0 2px 0 #d9e6f1; }
+
+/* primary buttons: d-pad + bomb */
+.game-screen .dpad { --k: 64px; position: relative; flex: none; width: calc(var(--k) * 3 + 12px); height: calc(var(--k) * 2 + 6px); pointer-events: auto; touch-action: none; }
+.game-screen .dpad button {
+  position: absolute; display: grid; place-items: center; width: var(--k); height: var(--k); padding: 0;
+  border: 2px solid #d9f3ff; border-radius: 30%;
+  background: linear-gradient(160deg, #8fe2ff 0%, #45b5ff 28%, #2788f2 68%, #1866d2 100%);
+  color: #fff; font-size: calc(var(--k) * .36); text-shadow: 0 2px 1px #1463bd;
+  box-shadow: inset 0 2px 1px #ffffffc0, 0 4px 0 #1767c4, 0 8px 14px #1d6fc025;
+  touch-action: none; user-select: none; transition: transform 80ms, box-shadow 80ms;
+}
+.game-screen .dpad button:nth-child(1) { left: calc(var(--k) + 6px); top: 0; }
+.game-screen .dpad button:nth-child(2) { left: 0; top: calc(var(--k) + 6px); }
+.game-screen .dpad button:nth-child(3) { left: calc(var(--k) + 6px); top: calc(var(--k) + 6px); }
+.game-screen .dpad button:nth-child(4) { left: calc(var(--k) * 2 + 12px); top: calc(var(--k) + 6px); }
+.game-screen .dpad button.is-pressed, .game-screen .dpad button:active { transform: translateY(3px); box-shadow: inset 0 2px 6px #0d4f9a66, 0 1px 0 #1767c4; }
+
+.game-screen .bomb-button {
+  --b: 112px; position: relative; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  width: var(--b); height: var(--b); padding: 0; border: 3px solid #e6faff; border-radius: 50%;
+  background: radial-gradient(circle at 32% 22%, #9cecff, #2ea6f7 55%, #1572d9);
+  color: #fff; box-shadow: inset 0 3px 2px #ffffffa0, 0 5px 0 #1767c4, 0 10px 18px #1d6fc030;
+  pointer-events: auto; touch-action: none; user-select: none; transition: transform 80ms, box-shadow 80ms;
+}
+.game-screen .bomb-button svg { width: calc(var(--b) * .4); height: calc(var(--b) * .4); filter: drop-shadow(0 2px 1px #0b69c8); }
+.game-screen .bomb-button small { font-size: var(--f-m); font-weight: 900; letter-spacing: 0; }
+.game-screen .bomb-button.is-pressed { transform: translateY(4px) scale(.97); box-shadow: inset 0 3px 8px #0d4f9a66, 0 1px 0 #1767c4; }
+.game-screen .bomb-button.is-fired::after { content: ''; position: absolute; inset: -5px; border: 3px solid #ffb33f; border-radius: 50%; pointer-events: none; animation: bomb-confirm 360ms ease-out forwards; }
+.game-screen .bomb-button:disabled, .game-screen .dpad button:disabled { cursor: default; }
+
+/* ---------------- toast + spectator bar ---------------- */
+.game-screen .game-toast {
+  position: fixed; z-index: 6; left: 50%; top: calc(var(--topbar-h) + 52px); bottom: auto; transform: translateX(-50%);
+  max-width: calc(100vw - 32px); min-height: 0; padding: 7px 14px; display: flex; align-items: center; gap: 6px;
+  border: 1.5px solid var(--line); border-radius: 99px; background: #fff; box-shadow: var(--lip), 0 8px 20px #1a3a6a18;
+  color: var(--ink); font-size: var(--f-s); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+.game-screen .game-toast::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
+.game-screen .game-toast:empty { display: none; }
+
+.game-screen .spectate-bar {
+  position: fixed; z-index: 7; left: 50%; bottom: var(--safe-b); transform: translateX(-50%);
+  width: min(calc(100vw - var(--g) * 2), 460px);
+  display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px;
+  border: 1.5px solid var(--line); border-radius: var(--r-l); background: #fff; box-shadow: var(--lip), 0 10px 24px #1a3a6a1f;
+}
+.game-screen .spectate-bar[hidden] { display: none; }
+.game-screen .spectate-eye { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #eaf3fc; font-size: 20px; }
+.game-screen .spectate-bar > div { flex: 1; min-width: 0; }
+.game-screen .spectate-bar strong { display: block; font-size: var(--f-m); font-weight: 900; }
+.game-screen .spectate-bar small { display: block; margin-top: 2px; color: var(--muted); font-size: var(--f-xs); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-screen .spectate-bar .button { flex: none; min-height: 0; padding: 10px 14px; border-radius: var(--r-s); font-size: var(--f-s); }
+
+.game-screen.is-spectating :is(.mobile-controls, .skill-dock, .desktop-controls) { opacity: .3; filter: grayscale(.9); pointer-events: none; }
+.game-screen.is-spectating :is(.base-attributes, #passive-status) { opacity: .45; }
+
+/* ================= desktop ================= */
+.game-screen:not(.layout-touch) { --side: 170px; }
+
+/* ================= touch: portrait ================= */
+@media (orientation: portrait) {
+  .game-screen.layout-touch {
+    --topbar-h: 56px;
+    --board-ratio: 1.2264;      /* 13 / 10.6: a little taller on phones */
+    --k: clamp(54px, 18vw, 78px);
+    --b: clamp(96px, 31vw, 132px);
+    --chip: clamp(52px, 15.5vw, 68px);
+    --rcol: max(var(--b), calc(var(--chip) * 2 + 10px));
+    --deck: calc(var(--chip) + 10px + var(--b) + var(--safe-b) + 14px);
+  }
+  .game-screen.layout-touch .mobile-controls {
+    position: fixed; z-index: 5; left: max(var(--g), env(safe-area-inset-left)); right: max(var(--g), env(safe-area-inset-right)); bottom: var(--safe-b);
+    display: flex; align-items: flex-end; justify-content: space-between; pointer-events: none;
+  }
+  .game-screen.layout-touch .dpad { --k: inherit; }
+  .game-screen.layout-touch .bomb-button { --b: inherit; margin-right: calc((var(--rcol) - var(--b)) / 2); }
+  .game-screen.layout-touch .skill-dock {
+    right: max(var(--g), env(safe-area-inset-right)); bottom: calc(var(--safe-b) + var(--b) + 10px);
+    width: var(--rcol); justify-content: center;
+  }
+  .game-screen.layout-touch .skill-dock button { width: var(--chip); height: var(--chip); }
+  .game-screen.layout-touch .skill-dock .reward-icon { width: calc(var(--chip) * .46); height: calc(var(--chip) * .46); }
+}
+@media (orientation: portrait) and (max-height: 700px) {
+  .game-screen.layout-touch { --topbar-h: 50px; --k: clamp(50px, 15vw, 60px); --b: 90px; --chip: 48px; --passive-h: 30px; }
+}
+@media (orientation: portrait) and (min-width: 600px) {
+  .game-screen.layout-touch .match-scores { width: min(100%, 640px); }
+  .game-screen.layout-touch .board-card { max-width: 680px; }
+}
+
+/* ================= touch: landscape ================= */
+@media (orientation: landscape) {
+  .game-screen.layout-touch {
+    --topbar-h: 48px;
+    --k: clamp(44px, 10vh, 76px);
+    --b: clamp(76px, 19vh, 128px);
+    --chip: clamp(50px, 11vh, 66px);
+    --rcol: max(var(--b), calc(var(--chip) * 2 + 8px));
+    --col: max(calc(var(--k) * 3 + 12px), var(--rcol));
+    --passive-h: 30px;
+    --deck: 8px;
+  }
+  .game-screen.layout-touch .game-layout {
+    display: grid; grid-template-columns: var(--col) minmax(0, 1fr) var(--col); align-items: stretch; gap: 14px;
+  }
+  .game-screen.layout-touch .match-scores { grid-column: 1; grid-row: 1; flex-direction: column; align-self: start; width: 100%; margin: 0; gap: 6px; }
+  .game-screen.layout-touch .match-score { flex: 0 0 auto; padding: 5px 9px; }
+  .game-screen.layout-touch .score-tag { position: static; order: 0; }
+  .game-screen.layout-touch .board-stage { grid-column: 2; grid-row: 1; }
+  .game-screen.layout-touch .mobile-controls {
+    position: fixed; z-index: 5; left: max(var(--g), env(safe-area-inset-left)); right: max(var(--g), env(safe-area-inset-right)); bottom: var(--safe-b);
+    display: flex; align-items: flex-end; justify-content: space-between; pointer-events: none;
+  }
+  .game-screen.layout-touch .dpad { --k: inherit; }
+  .game-screen.layout-touch .bomb-button { --b: inherit; margin-right: calc((var(--col) - var(--b)) / 2); }
+  .game-screen.layout-touch .skill-dock {
+    right: max(var(--g), env(safe-area-inset-right)); bottom: calc(var(--safe-b) + var(--b) + 10px);
+    width: var(--col); justify-content: center; gap: 8px;
+  }
+  .game-screen.layout-touch .skill-dock button { width: var(--chip); height: var(--chip); }
+  .game-screen.layout-touch .skill-dock .reward-icon { width: calc(var(--chip) * .46); height: calc(var(--chip) * .46); }
+  .game-screen.layout-touch .game-toast { top: calc(var(--topbar-h) + 6px); }
+  .game-screen.layout-touch .spectate-bar { width: min(calc(100vw - var(--col) * 2 - 48px), 440px); padding: 8px 10px; }
+  .game-screen.layout-touch .spectate-eye { width: 34px; height: 34px; font-size: 17px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .game-screen.layout-touch { --attr-h: 34px; }
+  .game-screen.layout-touch .round-clock { padding: 1px 16px; }
+  .game-screen.layout-touch .round-clock strong { font-size: 20px; line-height: 28px; }
+  .game-screen.layout-touch .mini-action { width: 36px; height: 36px; }
+}
+
+/* touch layouts never show keyboard hints or key badges */
+.game-screen.layout-touch .desktop-controls,
+.game-screen.layout-touch .skill-dock kbd { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .game-screen .bomb-button.is-fired::after { animation: none; }
+  .game-screen .dpad button { transition: none; }
+}

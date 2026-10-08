@@ -7,7 +7,7 @@ const descriptions: Record<Reward, { effect: string; use: string }> = {
   flame: { effect: '爆炸向上、下、左、右各延长 1 格，普通炸弹最多 5 格。', use: '拾取自动生效。仍会被固定墙和箱子阻挡；范围越大，越要预留退路。' },
   speed: { effect: '基础移动速度提升 10%，最多提升至 130%。', use: '拾取自动生效，最多成长 3 次。不是限时疾跑。' },
   shield: { effect: '自动抵挡一次爆炸，破盾后保护 0.8 秒。', use: '不需要按键，不叠加层数。短暂保护防止连续爆炸立即击杀。' },
-  life: { effect: '抵挡一次致命淘汰机会，消耗额外生命后在安全位置复活。', use: '最多储备 1 条。找不到安全位置仍会等待；复活保护 2 秒，基础成长保留。' },
+  life: { effect: '每条抵挡一次致命淘汰，消耗 1 条后在安全位置复活。', use: '可以累加，最多储备 3 条，每次被淘汰消耗 1 条。找不到安全位置仍会等待；复活保护 2 秒，基础成长保留。' },
   invincible: { effect: '无敌 3 秒，结束前保护罩闪烁。', use: '主动释放后立即生效、消耗道具。不能穿墙或穿炸弹。' },
   super: { effect: '下一颗炸弹范围额外 +2 格，每个方向可穿透一个箱子，不能穿固定墙。', use: '先按技能键准备，再按放弹释放；再次按技能键取消准备。成功放下才消耗。' },
   dash: { effect: '移动速度临时提高 40%，持续 5 秒；总速度不超过基础的 170%。', use: '主动释放后立即生效、消耗道具。与轻快鞋不同，它是限时增益。' },
@@ -26,7 +26,7 @@ export function itemGuideMarkup(): string {
 export function itemGuideSections(compact = false): string {
   const quick: Record<Reward,string> = {
     coin:'本场积分 +5。', bomb:'容量 +1，最多 5 颗。', flame:'四向范围 +1，最多 5 格。', speed:'基础移速 +10%，最多 130%。',
-    shield:'自动挡住一次爆炸。', life:'额外复活一次，最多储备 1 条。', invincible:'主动无敌 3 秒。', super:'下一颗范围 +2，每方向穿透一个箱子。', dash:'疾跑 5 秒，移速 +40%（总上限 170%）。', rapid:'连发 4 秒，按住放弹，间隔 0.12 秒。',
+    shield:'自动挡住一次爆炸。', life:'每条复活一次，可累加，最多 3 条。', invincible:'主动无敌 3 秒。', super:'下一颗范围 +2，每方向穿透一个箱子。', dash:'疾跑 5 秒，移速 +40%（总上限 170%）。', rapid:'连发 4 秒，按住放弹，间隔 0.12 秒。',
   };
   const groups: { title: string; subtitle: string; items: Reward[] }[] = [
     { title: '积分奖励', subtitle: '地图随机刷新 · 拾取即加分', items: ['coin'] },
