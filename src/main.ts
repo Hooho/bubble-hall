@@ -32,6 +32,16 @@ const appRoot = document.querySelector<HTMLDivElement>('#app');
 if (!appRoot) throw new Error('App root not found');
 const app: HTMLDivElement = appRoot;
 
+// Suppress browser callouts in battle without disabling editing in save dialogs.
+for (const eventName of ['contextmenu', 'selectstart', 'dragstart'] as const) {
+  app.addEventListener(eventName, (event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest('.game-screen')) return;
+    if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+    event.preventDefault();
+  });
+}
+
 let screen: Screen = 'home';
 let difficulty: Difficulty = 'normal';
 let selectedMap: MapId = 'bay';
