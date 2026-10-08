@@ -90,7 +90,7 @@ function applyPreferences(): void {
   document.documentElement.classList.toggle('reduce-motion',settings.reducedMotion);
   document.documentElement.classList.toggle('force-touch',settings.controls==='touch');
   document.documentElement.dataset.palette = settings.palette;
-  game?.configure(settings.quality,settings.reducedMotion,settings.boardStyle??'modern');
+  game?.configure(settings.quality,settings.reducedMotion,settings.boardStyle ?? 'classic');
   game?.setPlayerColor(cosmetics.find(c=>c.id===settings.palette)!.color);
 }
 const audio = new ArcadeAudio();
@@ -472,7 +472,7 @@ function settingsMarkup(): string {
   const onOff = (setting: SegmentedSetting, label: string, on: boolean) => segmented(setting, label, on ? 'on' : 'off', [['on', '开'], ['off', '关']]);
   const game = `<section class="settings-group" aria-labelledby="sg-game"><h3 id="sg-game" class="settings-group-title">游戏设置</h3>
     ${row('每局时长', '对新开的对局生效', segmented('matchMinutes', '每局时长', String(matchMinutes()), [['1', '1 分钟'], ['2', '2 分钟'], ['3', '3 分钟']]))}
-    ${row('棋盘样式', '立体斜视角，或经典俯视棋盘', segmented('boardStyle', '棋盘样式', settings.boardStyle ?? 'modern', [['modern', '立体'], ['classic', '经典']]))}
+    ${row('棋盘样式', '立体斜视角，或经典俯视棋盘', segmented('boardStyle', '棋盘样式', settings.boardStyle ?? 'classic', [['modern', '立体'], ['classic', '经典']]))}
     ${row('画质', '流畅模式关闭阴影，适合低性能设备', segmented('quality', '画质', settings.quality, [['high', '精细'], ['low', '流畅']]))}
     ${row('操作方式', '自动识别，或强制显示触控按键', segmented('controls', '操作方式', settings.controls, [['auto', '自动'], ['touch', '触控']]))}
     ${row('声音效果', '爆炸、拾取和胜负反馈', onOff('sound', '声音效果', soundEnabled))}
@@ -659,7 +659,7 @@ function mountGame(): void {
   if (!canvas) return;
   if (!game) {
     game = new GameEngine(canvas);
-    game.configure(settings.quality, settings.reducedMotion, settings.boardStyle ?? 'modern');
+    game.configure(settings.quality, settings.reducedMotion, settings.boardStyle ?? 'classic');
     gameEventUnsubscribe = game.on(handleGameEvent);
   }
   if(restoring && suspended){game.restore(suspended.snapshot);restoring=false;startNewRound=false;resizeGame();requestAnimationFrame(()=>showPauseOverlay());}

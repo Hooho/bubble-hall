@@ -11,7 +11,7 @@ export type Save = { career: Career; tournament: Tournament | null; active: Acti
 export function savedMatchSlots(save: Save): MatchSlots {
   return save.matches ?? { quick: save.active?.mode==='quick'?save.active:null, championship: save.active?.mode==='championship'?save.active:null };
 }
-export const initialSave = (): Save => ({ career: newCareer(), tournament: null, active: null, settings: { quality: 'high', reducedMotion: false, controls: 'auto', palette: 'blue', unlocked: ['blue'] } });
+export const initialSave = (): Save => ({ career: newCareer(), tournament: null, active: null, settings: { quality: 'high', boardStyle: 'classic', reducedMotion: false, controls: 'auto', palette: 'blue', unlocked: ['blue'] } });
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v: unknown, max = 1e12) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max;
 const text = (v: unknown, max = 100) => typeof v === 'string' && v.length <= max;

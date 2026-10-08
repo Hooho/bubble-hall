@@ -149,7 +149,7 @@ export class GameEngine {
   public readonly scene = new THREE.Scene();
   private readonly perspectiveCamera = new THREE.PerspectiveCamera(28, 1, 0.1, 160);
   private readonly orthoCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
-  private boardStyle: BoardStyle = 'modern';
+  private boardStyle: BoardStyle = 'classic';
   private viewSize: { width: number; height: number } | null = null;
   private readonly hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
   private readonly keyLight = new THREE.DirectionalLight(0xffffff, 1);
