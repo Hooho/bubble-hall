@@ -219,7 +219,7 @@
     --b: clamp(96px, 31vw, 132px);
     --chip: clamp(52px, 15.5vw, 68px);
     --rcol: max(var(--b), calc(var(--chip) * 2 + 10px));
-    --control-lift: clamp(32px, 6dvh, 64px);
+    --control-lift: clamp(48px, 9dvh, 88px);
     --control-bottom: calc(var(--safe-b) + var(--control-lift));
     --deck: calc(var(--chip) + 10px + var(--b) + var(--control-bottom) + 14px);
   }
@@ -237,7 +237,7 @@
   .game-screen.layout-touch .skill-dock .reward-icon { width: calc(var(--chip) * .46); height: calc(var(--chip) * .46); }
 }
 @media (orientation: portrait) and (max-height: 700px) {
-  .game-screen.layout-touch { --topbar-h: 50px; --k: clamp(50px, 15vw, 60px); --b: 90px; --chip: 48px; --passive-h: 30px; --control-lift: 24px; }
+  .game-screen.layout-touch { --topbar-h: 50px; --k: clamp(50px, 15vw, 60px); --b: 90px; --chip: 48px; --passive-h: 30px; --control-lift: 36px; }
 }
 @media (orientation: portrait) and (min-width: 600px) {
   .game-screen.layout-touch .match-scores { width: min(100%, 640px); }
