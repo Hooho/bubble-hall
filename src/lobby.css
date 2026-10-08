@@ -38,3 +38,26 @@
 @container lobby-mascot (max-height:160px){.home-screen .toy-character{scale:.32}}
 @container lobby-mascot (max-height:115px){.home-screen .toy-character{scale:.22}}
 @container lobby-mascot (min-height:340px){.home-screen .toy-character{scale:.8}}
+
+/* The mascot sits behind the action stack; its lower quarter is occluded. */
+@media(max-width:600px) and (orientation:portrait){
+ .home-screen{grid-template-rows:auto 170px auto;gap:12px;align-content:center}
+ /* Move the heading visually without changing the mascot/action grid tracks. */
+ .home-screen .home-copy{margin-bottom:0;translate:0 calc(-1 * clamp(20px,4dvh,36px))}
+ .home-screen .hero-stage{grid-area:2/1;overflow:visible;z-index:1;container-type:normal;container-name:none;--mascot-scale:.65;--mascot-overlap:55px}
+ .home-screen .toy-character{top:auto;bottom:calc(-1 * var(--mascot-overlap) - 12px);left:50%;translate:-50% 0;transform-origin:center bottom;scale:var(--mascot-scale)}
+ .home-screen .stage-orbit{width:200px;top:auto;bottom:-20px;height:200px}
+ .home-screen .home-actions{grid-area:3/1;z-index:3;isolation:isolate}
+ .home-screen .lobby-secondary button{background:#f7fcff}
+}
+@media(max-width:600px) and (orientation:portrait) and (max-height:720px){
+ .home-screen{grid-template-rows:auto 125px auto}
+ .home-screen .hero-stage{--mascot-scale:.48;--mascot-overlap:41px}
+ .home-screen .stage-orbit{width:150px;height:150px}
+}
+@media(max-width:600px) and (orientation:portrait) and (max-height:570px){
+ .home-screen{grid-template-rows:auto 80px auto}
+ .home-screen .home-copy{translate:0 -12px}
+ .home-screen .hero-stage{--mascot-scale:.3;--mascot-overlap:26px}
+ .home-screen .stage-orbit{width:100px;height:100px}
+}

@@ -1,0 +1,78 @@
+/* Lobby: live AI match as the hero, menu on the left (desktop) / below (phone). */
+.lobby-screen {
+  position: relative; min-height: 100dvh; overflow: hidden;
+  display: grid; grid-template-columns: minmax(340px, 460px) minmax(0, 1fr); grid-template-rows: auto 1fr;
+  gap: 0 3vw; padding: 20px max(28px, 4vw) 28px;
+  background:
+    radial-gradient(60% 70% at 72% 52%, #d6eeff 0%, #e9f6ff 45%, #f6fbff00 75%),
+    linear-gradient(180deg, #f7fbff 0%, #eef7ff 100%);
+}
+.lobby-bar { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; z-index: 3; }
+.lobby-brand { display: flex; align-items: center; gap: 9px; font-size: 17px; font-weight: 900; color: var(--c-ink); }
+.lobby-brand i { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0 16%, #8fd3ff 17% 40%, #1f84f2 41%); box-shadow: 0 2px 0 #1563c4; }
+.lobby-bar-tools { display: flex; gap: 8px; }
+.lobby-chip { height: 42px; padding: 0 16px; border: 2px solid var(--c-line); border-radius: var(--r-md); background: #fff; color: var(--c-ink); font: inherit; font-size: 14px; font-weight: 700; box-shadow: var(--e-card); cursor: pointer; }
+.lobby-chip-icon { width: 42px; padding: 0; font-size: 18px; }
+.lobby-chip:hover { border-color: var(--c-line-strong); }
+
+.lobby-arena { grid-column: 2; grid-row: 2; position: relative; min-height: 0; align-self: stretch; margin: 0 -2vw 0 0; }
+.lobby-arena canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.arena-tags { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 2; pointer-events: none; }
+.arena-tags span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--r-pill); background: #ffffffd9; border: 1px solid var(--c-line); font-size: 12px; font-weight: 700; color: var(--c-ink-soft); backdrop-filter: blur(6px); }
+.arena-live b { width: 8px; height: 8px; border-radius: 50%; background: #ff4a4a; box-shadow: 0 0 0 3px #ff4a4a33; animation: lobby-live 1.2s ease-in-out infinite; }
+@keyframes lobby-live { 50% { opacity: .35; } }
+
+.lobby-copy { grid-column: 1; grid-row: 2; align-self: center; position: relative; z-index: 2; padding-bottom: 4vh; }
+.lobby-title { margin: 0 0 14px; font-size: clamp(52px, 6.4vw, 96px); line-height: 1.02; font-weight: 950; letter-spacing: -.05em; color: var(--c-ink); }
+.lobby-title span { display: block; }
+.lobby-title em { font-style: normal; display: inline-block; color: #ffb21f; transform: rotate(8deg); }
+.lobby-title-hot { position: relative; width: max-content; color: var(--c-brand); }
+.lobby-title-hot::after { content: ""; position: absolute; z-index: -1; left: 3%; right: 6%; bottom: .07em; height: .17em; border-radius: 99px; background: #ffd23f; transform: rotate(-1.5deg); }
+.lobby-sub { margin: 0 0 26px; font-size: 15px; line-height: 1.75; color: var(--c-muted); }
+.lobby-sub strong { color: var(--c-ink); }
+.lobby-actions { display: grid; gap: 12px; width: min(100%, 420px); }
+.lobby-mode { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 78px; padding: 12px 14px 12px 22px; border: 2px solid var(--c-line); border-radius: 20px; background: #fff; color: var(--c-ink); font: inherit; text-align: left; box-shadow: 0 5px 0 #c7dcec; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.lobby-mode:hover { border-color: var(--c-line-strong); }
+.lobby-mode:active { transform: translateY(3px); box-shadow: 0 2px 0 #c7dcec; }
+.lobby-mode strong { display: block; font-size: 22px; font-weight: 900; }
+.lobby-mode small { display: block; margin-top: 3px; font-size: 12px; color: var(--c-muted); }
+.lobby-mode > b { flex: 0 0 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; font-size: 20px; background: #fff4d2; color: #d98a00; }
+.lobby-mode-primary { border-color: var(--c-brand-deep); background: linear-gradient(#3aa0ff, var(--c-brand)); color: #fff; box-shadow: 0 5px 0 var(--c-brand-deep), inset 0 2px 0 #8ecbff; }
+.lobby-mode-primary:hover { border-color: var(--c-brand-deep); filter: brightness(1.04); }
+.lobby-mode-primary:active { box-shadow: 0 2px 0 var(--c-brand-deep), inset 0 2px 0 #8ecbff; }
+.lobby-mode-primary small { color: #dcefff; }
+.lobby-mode-primary > b { background: #ffffff30; color: #fff; }
+.lobby-minor { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lobby-minor button { height: 46px; border: 2px solid var(--c-line); border-radius: var(--r-md); background: #fff; color: var(--c-ink-soft); font: inherit; font-weight: 700; box-shadow: var(--e-card); cursor: pointer; }
+.lobby-minor button:hover { border-color: var(--c-line-strong); }
+.lobby-mode:focus-visible, .lobby-minor button:focus-visible, .lobby-chip:focus-visible { outline: 3px solid #7fc0ff; outline-offset: 2px; }
+
+/* phone portrait: arena on top, menu below */
+@media (max-width: 860px) and (orientation: portrait) {
+  .lobby-screen { grid-template-columns: 1fr; grid-template-rows: auto minmax(240px, 42dvh) auto; padding: 14px 16px max(18px, env(safe-area-inset-bottom)); overflow: visible; }
+  .lobby-arena { grid-column: 1; grid-row: 2; margin: 0 -16px; }
+  .arena-tags { bottom: 2%; }
+  .lobby-copy { grid-row: 3; padding: 0; }
+  .lobby-title { font-size: clamp(42px, 12vw, 64px); margin: 4px 0 8px; }
+  .lobby-sub { font-size: 13px; margin-bottom: 16px; }
+  .lobby-actions { width: 100%; }
+  .lobby-mode { min-height: 68px; }
+  .lobby-mode strong { font-size: 20px; }
+}
+@media (max-width: 860px) and (orientation: portrait) and (max-height: 720px) {
+  .lobby-screen { grid-template-rows: auto minmax(200px, 34dvh) auto; }
+  .lobby-sub { display: none; }
+}
+/* phone landscape: side by side, compact */
+@media (max-height: 540px) and (orientation: landscape) {
+  .lobby-screen { grid-template-columns: minmax(260px, 340px) 1fr; padding: 10px 20px; height: 100dvh; }
+  .lobby-arena { margin: 0; }
+  .arena-tags { display: none; }
+  .lobby-title { font-size: 40px; margin-bottom: 8px; }
+  .lobby-sub { display: none; }
+  .lobby-mode { min-height: 54px; padding: 6px 10px 6px 16px; }
+  .lobby-mode strong { font-size: 17px; }
+  .lobby-mode > b { flex-basis: 38px; height: 38px; }
+  .lobby-minor button { height: 38px; }
+  .lobby-actions { gap: 8px; }
+}

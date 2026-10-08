@@ -138,3 +138,16 @@ function advanceTopTwo(t: Tournament): void {
   if (t.round === 'final') t.finals = [...qualified];
   t.needsReward = qualified.includes('player'); t.replay = null;
 }
+
+/** The player is out: the tournament is still running but no current group includes them. */
+export const playerEliminated = (t: Tournament): boolean => t.round !== 'complete' && !t.matches.some(m => m.members.includes('player'));
+
+/** Simulates every remaining match and round until the tournament is complete. */
+export function simulateToEnd(t: Tournament): void {
+  for (let rounds = 0; t.round !== 'complete' && rounds < 30; rounds += 1) {
+    for (const m of t.matches) {
+      for (let tries = 0; !m.standings && tries < 10; tries += 1) submitMatch(t, m, simulate(replayMembers(t, m) ?? m.members));
+    }
+    advance(t);
+  }
+}

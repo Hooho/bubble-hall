@@ -4,16 +4,22 @@ import { mapInfo, type MapId } from './maps';
 import { roster, type Contestant } from './roster';
 import type { Bonus } from './tournament';
 import { MATCH_RULES } from './match-rules';
-import { rewardCanvas } from './reward-icons';
+import { preloadRewardIcons, rewardCanvas } from './reward-icons';
 import { isActive, newSkills, rewardNames, type Reward } from './skills';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { crateTexture, floorTexture, grassTexture, shieldBadgeTexture } from './board-art';
+import { createAncientKit, instantiate, slateTexture, type AncientKit } from './ancient-art';
 
 export const BOARD_WIDTH = 13;
 export const BOARD_HEIGHT = 11;
+const CAMERA_TILT = 56;
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'master';
 export type Direction = 'up' | 'down' | 'left' | 'right';
 export type TileKind = 'floor' | 'wall' | 'crate';
+/** modern = 立体糖果风 + 斜视透视镜头；classic = 原来的扁平俯视棋盘。 */
+export type BoardStyle = 'modern' | 'classic';
 export type ItemKind = Reward;
 
 export type GridPosition = { x: number; y: number };
@@ -142,7 +148,19 @@ class SeededRandom {
 
 export class GameEngine {
   public readonly scene = new THREE.Scene();
-  public readonly camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+  private readonly perspectiveCamera = new THREE.PerspectiveCamera(28, 1, 0.1, 160);
+  private readonly orthoCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+  private boardStyle: BoardStyle = 'modern';
+  private viewSize: { width: number; height: number } | null = null;
+  private readonly hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
+  private readonly keyLight = new THREE.DirectionalLight(0xffffff, 1);
+  private readonly environmentMap: THREE.Texture;
+  public get camera(): THREE.PerspectiveCamera | THREE.OrthographicCamera {
+    return this.boardStyle === 'modern' ? this.perspectiveCamera : this.orthoCamera;
+  }
+  private readonly cameraTarget = new THREE.Vector3();
+  private cameraDistance = 14;
+  private mapTextures: THREE.Texture[] = [];
   public readonly renderer: THREE.WebGLRenderer;
 
   private readonly world = new THREE.Group();
@@ -180,25 +198,52 @@ export class GameEngine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    this.scene.background = new THREE.Color(0xf4faff);
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.environmentMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
     this.scene.add(this.world);
     this.world.add(this.mapGroup, this.itemGroup, this.warningGroup, this.bombGroup, this.actorGroup, this.effectGroup);
 
-    const ambient = new THREE.HemisphereLight(0xffffff, 0x7895b8, 1.6);
-    this.scene.add(ambient);
-    const keyLight = new THREE.DirectionalLight(0xfff9ee, 1.7);
-    keyLight.position.set(-3, 18, 4);
+    this.scene.add(this.hemiLight);
+    const keyLight = this.keyLight;
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.set(2048, 2048);
-    keyLight.shadow.intensity = 0.35;
-    Object.assign(keyLight.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 });
+    Object.assign(keyLight.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 40 });
     keyLight.shadow.normalBias = 0.04;
     keyLight.shadow.radius = 3;
     this.scene.add(keyLight);
+    this.applyBoardStyle();
+    preloadRewardIcons(['coin', 'bomb', 'flame', 'speed', 'shield', 'life', 'invincible', 'super', 'dash', 'rapid']);
+  }
 
-    this.camera.position.set(0, 18, 9);
-    this.camera.lookAt(0, 0, 0);
+  /** Lighting, tone mapping and background for the active board style. */
+  private applyBoardStyle(): void {
+    const modern = this.boardStyle === 'modern';
+    this.renderer.toneMapping = modern ? THREE.NeutralToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = modern ? 0.95 : 1;
+    this.scene.environment = modern ? this.environmentMap : null;
+    this.scene.environmentIntensity = 0.3;
+    this.scene.background = new THREE.Color(modern ? 0xf6ecd6 : 0xf4faff);
+    this.hemiLight.color.setHex(modern ? 0xfffaf0 : 0xffffff);
+    this.hemiLight.groundColor.setHex(modern ? 0xb59a74 : 0x7895b8);
+    this.hemiLight.intensity = modern ? 1.0 : 1.6;
+    this.keyLight.color.setHex(modern ? 0xfff1dc : 0xfff9ee);
+    this.keyLight.intensity = modern ? 2.1 : 1.7;
+    if (modern) this.keyLight.position.set(-6, 15, 7); else this.keyLight.position.set(-3, 18, 4);
+    this.keyLight.shadow.intensity = modern ? 0.42 : 0.35;
+    for (const actor of this.actors.values()) this.applyShieldStyle(actor.group);
+    if (this.viewSize) this.resize(this.viewSize.width, this.viewSize.height); else this.placeCamera();
+  }
+
+  public setBoardStyle(style: BoardStyle): void {
+    if (style === this.boardStyle) return;
+    this.boardStyle = style;
+    this.applyBoardStyle();
+    if (this.tiles.length) {
+      this.clearGroup(this.mapGroup);
+      this.tileMeshes.clear();
+      this.createMapMeshes();
+    }
   }
 
   public on(listener: Listener): () => void {
@@ -208,12 +253,21 @@ export class GameEngine {
 
   private practice = false;
 
-  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3), options: { practice?: boolean } = {}): void {
+  /** Attract mode for the lobby: every actor (including 'player') is AI-driven, no labels, transparent backdrop. */
+  private demo = false;
+
+  public start(difficulty: Difficulty, mapId: MapId = 'bay', opponents: Contestant[] = roster.slice(0, 3), options: { practice?: boolean; demo?: boolean } = {}): void {
+    this.demo = options.demo ?? false;
     this.practice = options.practice ?? false;
     this.mapId = mapId;
     this.opponents = opponents;
     this.difficulty = difficulty;
     this.resetWorld();
+    if (this.demo) {
+      this.scene.background = null;
+      const aura = this.actors.get('player')?.group.getObjectByName('player-aura');
+      if (aura) aura.visible = false;
+    }
     this.running = true;
   }
 
@@ -221,8 +275,9 @@ export class GameEngine {
     this.running = false;
   }
 
-  public configure(quality: 'low' | 'high', reducedMotion: boolean): void {
+  public configure(quality: 'low' | 'high', reducedMotion: boolean, boardStyle: BoardStyle = this.boardStyle): void {
     this.reducedMotion = reducedMotion;
+    this.setBoardStyle(boardStyle);
     this.renderer.setPixelRatio(quality === 'low' ? 1 : Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = quality === 'high';
   }
@@ -372,26 +427,52 @@ export class GameEngine {
   }
 
   public render(): void {
-    const shake = this.shakeTime > 0 && !this.reducedMotion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? this.shakeStrength * (this.shakeTime / 0.2) : 0;
-    this.camera.position.set(
-      shake > 0 ? Math.sin(this.elapsed * 91) * shake : 0,
-      18,
-      9 + (shake > 0 ? Math.cos(this.elapsed * 83) * shake : 0),
-    );
-    this.camera.lookAt(0, 0, 0);
+    this.placeCamera();
     this.renderer.render(this.scene, this.camera);
   }
 
+  /** Fixed tilted perspective camera that frames the whole board. */
+  private placeCamera(): void {
+    const shake = this.shakeTime > 0 && !this.reducedMotion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches ? this.shakeStrength * (this.shakeTime / 0.2) : 0;
+    if (this.boardStyle === 'classic') {
+      this.orthoCamera.position.set(shake > 0 ? Math.sin(this.elapsed * 91) * shake : 0, 18, 9 + (shake > 0 ? Math.cos(this.elapsed * 83) * shake : 0));
+      this.orthoCamera.lookAt(0, 0, 0);
+      return;
+    }
+    const tilt = THREE.MathUtils.degToRad(this.cameraTilt);
+    const sx = shake > 0 ? Math.sin(this.elapsed * 91) * shake : 0;
+    const sz = shake > 0 ? Math.cos(this.elapsed * 83) * shake : 0;
+    this.cameraTarget.set(0, 0, 0.25);
+    this.perspectiveCamera.position.set(sx, Math.sin(tilt) * this.cameraDistance, this.cameraTarget.z + Math.cos(tilt) * this.cameraDistance + sz);
+    this.perspectiveCamera.lookAt(this.cameraTarget);
+  }
+
   public resize(width: number, height: number): void {
+    this.viewSize = { width, height };
     const aspect = width / Math.max(height, 1);
     const viewHeight = Math.max(11.2, 13.8 / aspect);
-    this.camera.left = (-viewHeight * aspect) / 2;
-    this.camera.right = (viewHeight * aspect) / 2;
-    this.camera.top = viewHeight / 2;
-    this.camera.bottom = -viewHeight / 2;
-    this.camera.updateProjectionMatrix();
+    Object.assign(this.orthoCamera, { left: (-viewHeight * aspect) / 2, right: (viewHeight * aspect) / 2, top: viewHeight / 2, bottom: -viewHeight / 2 });
+    this.orthoCamera.updateProjectionMatrix();
+    // Narrow portrait phones are width-limited: a flatter lens and a slightly steeper angle shrink
+    // the perspective widening of the near edge, so the whole board fits with bigger cells.
+    const compact = typeof window !== 'undefined' && window.matchMedia('(orientation: portrait) and (max-width: 900px)').matches;
+    this.cameraTilt = compact ? 62 : CAMERA_TILT;
+    this.perspectiveCamera.fov = compact ? 20 : 28;
+    const t = Math.tan(THREE.MathUtils.degToRad(this.perspectiveCamera.fov / 2));
+    const sinTilt = Math.sin(THREE.MathUtils.degToRad(this.cameraTilt));
+    // Distance at which the whole board (plus a small margin) fits in the view.
+    // The near (bottom) edge is closer to the camera, so it needs extra width under perspective.
+    const nearShift = ((BOARD_HEIGHT + 1) / 2) * Math.cos(THREE.MathUtils.degToRad(this.cameraTilt));
+    const byWidth = (BOARD_WIDTH + (compact ? 0.35 : 0.8)) / (2 * t * aspect) + nearShift * 0.75;
+    const byDepth = ((BOARD_HEIGHT + (compact ? 0.6 : 1.1)) * sinTilt) / (2 * t);
+    this.cameraDistance = Math.max(byWidth, byDepth);
+    this.perspectiveCamera.aspect = aspect;
+    this.perspectiveCamera.updateProjectionMatrix();
+    this.placeCamera();
     this.renderer.setSize(width, height, false);
   }
+
+  private cameraTilt = CAMERA_TILT;
 
   public movePlayer(direction: Direction): void {
     const player = this.actors.get('player');
@@ -500,8 +581,83 @@ export class GameEngine {
   }
 
   private createMapMeshes(): void {
-    const material = (color: number, roughness = 0.45) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+    this.mapTextures.forEach((texture) => texture.dispose());
+    this.mapTextures = [];
+    this.treeParts = null;
+    this.ancientKit?.dispose();
+    this.ancientKit = null;
+    if (this.boardStyle === 'classic') { this.createClassicMapMeshes(); return; }
     const theme = mapInfo(this.mapId);
+    const forest = 'decor' in theme && theme.decor === 'forest';
+    const ancient = 'decor' in theme && theme.decor === 'ancient';
+    const floorMap = forest ? grassTexture(BOARD_WIDTH, BOARD_HEIGHT, theme.floor, 2187) : ancient ? slateTexture(BOARD_WIDTH, BOARD_HEIGHT, 2187) : floorTexture(BOARD_WIDTH, BOARD_HEIGHT, theme.floor, theme.grout, 2187);
+    const crateMap = crateTexture(theme.crate);
+    floorMap.anisotropy = crateMap.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    this.mapTextures = [floorMap, crateMap];
+    const material = (color: number, roughness = 0.45) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+    const rounded = (w: number, h: number, d: number, m: THREE.Material | THREE.Material[], radius = 0.06) =>
+      new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 4, radius), m);
+
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), material(theme.ground, 0.95));
+    ground.visible = !this.demo;
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.42;
+    ground.receiveShadow = true;
+    this.mapGroup.add(ground);
+
+    const tray = rounded(BOARD_WIDTH + 0.5, 0.36, BOARD_HEIGHT + 0.5, material(theme.grout, 0.9), 0.14);
+    tray.position.y = -0.29;
+    tray.receiveShadow = true;
+    this.mapGroup.add(tray);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(BOARD_WIDTH, BOARD_HEIGHT),
+      new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.82 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.105;
+    floor.receiveShadow = true;
+    this.mapGroup.add(floor);
+
+    // Glossy candy/ice blocks: physical clearcoat + a lighter cap so the top face reads clearly.
+    const wallMaterial = new THREE.MeshPhysicalMaterial({ color: theme.wall, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.18, });
+    const wallTopMaterial = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(theme.wall).lerp(new THREE.Color(0xffffff), 0.22), roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.1 });
+    const crateMaterial = new THREE.MeshStandardMaterial({ map: crateMap, roughness: 0.62 });
+    const wallH = 0.86;
+    const crateH = 0.8;
+
+    for (let y = 0; y < BOARD_HEIGHT; y += 1) {
+      for (let x = 0; x < BOARD_WIDTH; x += 1) {
+        const position = { x, y };
+        const kind = this.tiles[y][x];
+        if (kind === 'floor') continue;
+        let mesh: THREE.Mesh;
+        if (kind === 'wall' && forest) {
+          mesh = this.createTree(x, y, theme.wall);
+        } else if (kind === 'wall' && ancient) {
+          mesh = this.createAncientWall(x, y);
+        } else if (kind === 'wall') {
+          mesh = rounded(0.97, wallH, 0.97, wallMaterial, 0.12);
+          mesh.position.set(this.worldX(x), -0.105 + wallH / 2, this.worldZ(y));
+          const cap = rounded(0.8, 0.05, 0.8, wallTopMaterial, 0.025);
+          cap.position.y = wallH / 2 - 0.005;
+          mesh.add(cap);
+        } else {
+          mesh = rounded(0.9, crateH, 0.9, crateMaterial, 0.05);
+          mesh.position.set(this.worldX(x), -0.105 + crateH / 2, this.worldZ(y));
+        }
+        this.mapGroup.add(mesh);
+        mesh.traverse((child) => { if (child instanceof THREE.Mesh) { child.castShadow = true; child.receiveShadow = true; } });
+        this.tileMeshes.set(key(position), mesh);
+      }
+    }
+    this.createBushes(theme.bush);
+  }
+
+  /** The original flat, top-down board (kept as the "classic" board style). */
+  private createClassicMapMeshes(): void {
+    const material = (color: number, roughness = 0.45) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+    const theme = mapInfo(this.mapId).classic;
     const floors = [material(theme.floor, 0.85), material(0xf3f7f5, 0.85)];
     const wallMaterial = material(0x639cb8);
     const wallCapMaterial = material(theme.wall, 0.28);
@@ -556,6 +712,84 @@ export class GameEngine {
     }
   }
 
+  private ancientKit: AncientKit | null = null;
+
+  /** Ancient courtyard: red palace walls with glazed roofs on the border, stone lions as inner pillars. */
+  private createAncientWall(x: number, y: number): THREE.Mesh {
+    this.ancientKit ??= createAncientKit();
+    const border = x === 0 || y === 0 || x === BOARD_WIDTH - 1 || y === BOARD_HEIGHT - 1;
+    const mesh = instantiate(border ? this.ancientKit.wall : this.ancientKit.lion);
+    mesh.position.set(this.worldX(x), -0.105, this.worldZ(y));
+    if (border) {
+      // top/bottom rows run along x; side columns run along z (corners keep the x orientation)
+      if (!(y === 0 || y === BOARD_HEIGHT - 1)) mesh.rotation.y = Math.PI / 2;
+    } else {
+      // lions face the viewer, mirrored left/right of centre so pairs look at each other slightly
+      mesh.rotation.y = x < (BOARD_WIDTH - 1) / 2 ? 0.25 : x > (BOARD_WIDTH - 1) / 2 ? -0.25 : 0;
+      mesh.scale.setScalar(1.22);
+    }
+    return mesh;
+  }
+
+  private treeParts: { trunk: THREE.BufferGeometry; trunkMat: THREE.Material; tiers: THREE.BufferGeometry[]; leaves: THREE.Material[] } | null = null;
+
+  /** A 🌲-style pine: short trunk with three stacked cones, lighter towards the top. Trunk is the root mesh so it fits tileMeshes. */
+  private createTree(x: number, y: number, leafColor: number): THREE.Mesh {
+    if (!this.treeParts) {
+      const base = new THREE.Color(leafColor);
+      const leaf = (lift: number) => new THREE.MeshStandardMaterial({ color: base.clone().offsetHSL(0, 0.02, lift), roughness: 0.55, flatShading: true });
+      this.treeParts = {
+        trunk: new THREE.CylinderGeometry(0.075, 0.1, 0.26, 10),
+        trunkMat: new THREE.MeshStandardMaterial({ color: 0x8a5432, roughness: 0.8 }),
+        tiers: [new THREE.ConeGeometry(0.46, 0.46, 10), new THREE.ConeGeometry(0.34, 0.42, 10), new THREE.ConeGeometry(0.22, 0.4, 10)],
+        leaves: [leaf(-0.07), leaf(0.01), leaf(0.1)],
+      };
+    }
+    const parts = this.treeParts;
+    // deterministic per-cell variation
+    let h = ((x + 1) * 73856093) ^ ((y + 1) * 19349663);
+    const rnd = () => { h = (h * 1103515245 + 12345) & 0x7fffffff; return h / 0x7fffffff; };
+    const trunk = new THREE.Mesh(parts.trunk, parts.trunkMat);
+    trunk.position.set(this.worldX(x), -0.105 + 0.13, this.worldZ(y));
+    const scale = 0.94 + rnd() * 0.12;
+    trunk.scale.setScalar(scale);
+    // cone centres, measured from the trunk centre; each tier overlaps the one below
+    [0.33, 0.64, 0.93].forEach((cy, i) => {
+      const tier = new THREE.Mesh(parts.tiers[i], parts.leaves[i]);
+      tier.position.y = cy;
+      tier.rotation.y = rnd() * Math.PI;
+      trunk.add(tier);
+    });
+    trunk.rotation.y = rnd() * Math.PI * 2;
+    return trunk;
+  }
+
+  /** Decorative bushes scattered around the board edge (outside the playable area). */
+  private createBushes(color: number): void {
+    const random = new SeededRandom(907);
+    const leaf = new THREE.MeshStandardMaterial({ color, roughness: 0.75, flatShading: true });
+    const leafLight = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).lerp(new THREE.Color(0xfff6a0), 0.25), roughness: 0.75, flatShading: true });
+    const halfW = BOARD_WIDTH / 2 + 0.75;
+    const halfD = BOARD_HEIGHT / 2 + 0.75;
+    const spots: Array<[number, number]> = [];
+    for (let i = -BOARD_WIDTH / 2; i <= BOARD_WIDTH / 2; i += 1.6) spots.push([i, -halfD], [i, halfD]);
+    for (let i = -BOARD_HEIGHT / 2 + 0.8; i <= BOARD_HEIGHT / 2 - 0.8; i += 1.6) spots.push([-halfW, i], [halfW, i]);
+    for (const [bx, bz] of spots) {
+      if (random.next() < 0.3) continue;
+      const bush = new THREE.Group();
+      const puffs = 2 + Math.floor(random.next() * 3);
+      for (let p = 0; p < puffs; p += 1) {
+        const r = 0.28 + random.next() * 0.22;
+        const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), p === 0 ? leafLight : leaf);
+        puff.position.set((random.next() - 0.5) * 0.7, r * 0.75 - 0.3, (random.next() - 0.5) * 0.5);
+        puff.castShadow = true;
+        bush.add(puff);
+      }
+      bush.position.set(bx + (random.next() - 0.5) * 0.5, 0, bz + (random.next() - 0.5) * 0.4);
+      this.mapGroup.add(bush);
+    }
+  }
+
   private createActor(id: string, name: string, color: number, spawn: GridPosition, personality: Actor['personality']): void {
     const group = new THREE.Group();
     const body = new THREE.Mesh(
@@ -564,9 +798,8 @@ export class GameEngine {
     );
     body.position.y = 0.43;
     body.name = 'body';
-    const protection = new THREE.Mesh(new THREE.SphereGeometry(0.61, 16, 12), new THREE.MeshBasicMaterial({ color: 0x70e7ff, transparent: true, opacity: 0.24, depthWrite: false, wireframe: true }));
+    const protection = this.createShieldEffect();
     protection.name = 'protection';
-    protection.position.y = 0.55;
     protection.visible = false;
     group.add(protection);
     body.castShadow = true;
@@ -604,6 +837,7 @@ export class GameEngine {
     }
     const label = this.createActorLabel(id === 'player' ? 'YOU' : name, color, id === 'player');
     label.name = 'name-label';
+    label.visible = !this.demo;
     label.position.set(0, 1.38, 0);
     group.add(body, head, visor, ring, label);
     if (id === '0') { attachNuwa(group); label.position.y = 1.5; }
@@ -676,7 +910,7 @@ export class GameEngine {
         if (safe) { actor.position = safe; s.respawning = false; s.invincible = 2; actor.group.visible = true; actor.plannedPath = []; actor.state = 'patrol'; }
         continue;
       }
-      if (actor.id === 'player' || !actor.alive) continue;
+      if ((actor.id === 'player' && !this.demo) || !actor.alive) continue;
       actor.moveCooldown = Math.max(0, actor.moveCooldown - delta);
       actor.decisionCooldown -= delta;
       if (actor.decisionCooldown <= 0 && s.active) {
@@ -897,10 +1131,10 @@ export class GameEngine {
   }
 
   private createItemMesh(item: Item): void {
-    const texture = new THREE.CanvasTexture(rewardCanvas(item.kind));
+    const texture: THREE.CanvasTexture = new THREE.CanvasTexture(rewardCanvas(item.kind, () => { texture.needsUpdate = true; }));
     texture.colorSpace = THREE.SRGBColorSpace;
-    const mesh = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
-    mesh.scale.set(0.86, 0.86, 1);
+    const mesh = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, toneMapped: false }));
+    mesh.scale.set(0.9, 0.9, 1);
     mesh.position.set(this.worldX(item.position.x), 0.5, this.worldZ(item.position.y));
     mesh.userData.itemKey = key(item.position);
     this.itemGroup.add(mesh);
@@ -1050,7 +1284,53 @@ export class GameEngine {
     this.explosions.push({ mesh: group, ttl: 0.46 });
   }
 
+  private createShieldEffect(): THREE.Group {
+    const group = new THREE.Group();
+    const glow = (color: number, opacity: number) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+    const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.6, 24, 16), glow(0x5fe08a, 0.12));
+    bubble.position.y = 0.58;
+    bubble.name = 'shield-bubble';
+    const floorRing = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 48), glow(0x6cf09a, 0.75));
+    floorRing.rotation.x = -Math.PI / 2;
+    floorRing.position.y = 0.045;
+    floorRing.name = 'shield-ring';
+    const floorDisc = new THREE.Mesh(new THREE.CircleGeometry(0.46, 40), glow(0x2fc46a, 0.18));
+    floorDisc.rotation.x = -Math.PI / 2;
+    floorDisc.position.y = 0.04;
+    const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: shieldBadgeTexture(), transparent: true, depthWrite: false, toneMapped: false }));
+    badge.scale.setScalar(0.62);
+    badge.position.set(0.5, 1.2, 0.1);
+    badge.name = 'shield-badge';
+    const modernParts = new THREE.Group();
+    modernParts.name = 'shield-modern';
+    modernParts.add(bubble, floorDisc, floorRing, badge);
+    const classic = new THREE.Mesh(new THREE.SphereGeometry(0.61, 16, 12), new THREE.MeshBasicMaterial({ color: 0x70e7ff, transparent: true, opacity: 0.24, depthWrite: false, wireframe: true }));
+    classic.position.y = 0.55;
+    classic.name = 'shield-classic';
+    group.add(modernParts, classic);
+    this.applyShieldStyle(group);
+    return group;
+  }
+
+  private applyShieldStyle(root: THREE.Object3D): void {
+    const modern = this.boardStyle === 'modern';
+    const modernParts = root.getObjectByName('shield-modern');
+    const classic = root.getObjectByName('shield-classic');
+    if (modernParts) modernParts.visible = modern;
+    if (classic) classic.visible = !modern;
+  }
+
   private updateEffects(delta: number): void {
+    for (const actor of this.actors.values()) {
+      const shield = actor.group.getObjectByName('protection');
+      if (!shield?.visible) continue;
+      const badge = shield.getObjectByName('shield-badge');
+      const ring = shield.getObjectByName('shield-ring');
+      const bubble = shield.getObjectByName('shield-bubble') as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial> | undefined;
+      if (badge) badge.position.y = 1.2 + Math.sin(this.elapsed * 3) * 0.06;
+      if (ring) ring.scale.setScalar(1 + Math.sin(this.elapsed * 4) * 0.05);
+      if (bubble) bubble.material.opacity = 0.1 + Math.sin(this.elapsed * 5) * 0.04;
+    }
     const aura = this.actors.get('player')?.group.getObjectByName('player-aura');
     if (aura) {
       aura.userData.time += delta;

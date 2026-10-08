@@ -4,7 +4,7 @@ import type { GameSnapshot } from './game';
 import { roster, playerName } from './roster';
 import { maps } from './maps';
 import { rewardNames } from './skills';
-export type Settings = { quality: 'low' | 'high'; reducedMotion: boolean; controls: 'auto' | 'touch'; palette: 'blue' | 'mint' | 'gold'; unlocked: string[] };
+export type Settings = { quality: 'low' | 'high'; boardStyle?: 'modern' | 'classic'; reducedMotion: boolean; controls: 'auto' | 'touch'; palette: 'blue' | 'mint' | 'gold'; unlocked: string[] };
 export type ActiveMatch = { id: string; mode: 'quick' | 'championship'; snapshot: GameSnapshot };
 export type MatchSlots = Record<ActiveMatch['mode'], ActiveMatch | null>;
 export type Save = { career: Career; tournament: Tournament | null; active: ActiveMatch | null; matches?: MatchSlots; settings: Settings };
@@ -61,5 +61,5 @@ export function validateSave(v: unknown): v is Save {
     return m===null || (object(m)&&text(m.id)&&m.mode===mode&&snapshot(m.snapshot)&&(mode==='quick'||v.tournament!==null));
   }))) return false;
   const c=v.career,s=v.settings;
-  return points(c.points)&&points(c.crowns)&&num(c.coins)&&list(c.paid,100000,id=>text(id))&&list(c.history,10000,r=>object(r)&&text(r.id)&&text(r.date)&&['quick','championship'].includes(r.mode)&&difficulty(r.difficulty)&&num(r.place,64)&&r.place>=1&&num(r.points)&&list(r.standings,64,p=>object(p)&&ids.has(p.id)&&num(p.score))) && ['low','high'].includes(s.quality)&&typeof s.reducedMotion==='boolean'&&['auto','touch'].includes(s.controls)&&['blue','mint','gold'].includes(s.palette)&&list(s.unlocked,3,x=>['blue','mint','gold'].includes(x))&&s.unlocked.includes(s.palette) && (v.tournament===null||tournament(v.tournament)) && (v.active===null || (object(v.active)&&text(v.active.id)&&['quick','championship'].includes(v.active.mode)&&snapshot(v.active.snapshot)&& (v.active.mode==='quick'||v.tournament!==null)));
+  return points(c.points)&&points(c.crowns)&&num(c.coins)&&list(c.paid,100000,id=>text(id))&&list(c.history,10000,r=>object(r)&&text(r.id)&&text(r.date)&&['quick','championship'].includes(r.mode)&&difficulty(r.difficulty)&&num(r.place,64)&&r.place>=1&&num(r.points)&&list(r.standings,64,p=>object(p)&&ids.has(p.id)&&num(p.score))) && ['low','high'].includes(s.quality)&&(s.boardStyle===undefined||['modern','classic'].includes(s.boardStyle))&&typeof s.reducedMotion==='boolean'&&['auto','touch'].includes(s.controls)&&['blue','mint','gold'].includes(s.palette)&&list(s.unlocked,3,x=>['blue','mint','gold'].includes(x))&&s.unlocked.includes(s.palette) && (v.tournament===null||tournament(v.tournament)) && (v.active===null || (object(v.active)&&text(v.active.id)&&['quick','championship'].includes(v.active.mode)&&snapshot(v.active.snapshot)&& (v.active.mode==='quick'||v.tournament!==null)));
 }
