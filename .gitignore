@@ -4,3 +4,6 @@ dist/
 *.local
 .env*
 public/shared-players/
+
+# Retired nested checkout, retained locally during workspace migration
+/vendor/game-common/

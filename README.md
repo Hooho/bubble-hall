@@ -4,7 +4,7 @@
 
 ## 开发与验证
 
-- 克隆时初始化依赖：`git submodule update --init --recursive`。`vendor/game-common` 固定公共选手资源版本。
+- 克隆时初始化依赖：`git submodule update --init --recursive`。公共库仅由大仓引入，游戏引用 `../../packages/game-common`，版本由大仓固定。
 - 安装依赖：npm ci
 - 本地开发：npm run dev -- --host 127.0.0.1 --port 5174
 - 类型检查与生产构建：npm run build
@@ -12,7 +12,7 @@
 
 ## 已实现
 
-- 选手 ID、姓名和原始头像由 `vendor/game-common/players/` 统一提供。`src/roster.ts` 仅维护泡泡堂专属性格、智力和配色；女娲战场图集仍属于本游戏。
+- 选手 ID、姓名和原始头像由 `../../packages/game-common/players/` 统一提供。`src/roster.ts` 仅维护泡泡堂专属性格、智力和配色；女娲战场图集仍属于本游戏。
 - 开发和构建前自动运行 `prepare:players`，将公共头像复制到忽略版本管理的 `public/shared-players/`。需要手动刷新资源时运行 `npm run prepare:players`。构建后静态资源完整保留，运行不依赖 common 仓库位置或网络。
 - 旧 `public/avatars/` 副本暂保留用于迁移核对，运行已不引用；公共头像后续只在 common 中维护。
 
@@ -37,7 +37,7 @@
 
 ## 公共逻辑与德州扑克的边界
 
-选手身份、原始头像和通用存档核心来自固定 commit 的 `vendor/game-common`。泡泡堂的性格、能力、赛事、计分与数据校验单独维护；不复用德扑 UI。
+选手身份、原始头像和通用存档核心来自固定 commit 的 `../../packages/game-common`。泡泡堂的性格、能力、赛事、计分与数据校验单独维护；不复用德扑 UI。
 
 `src/shared/save-store.ts` 仅是泡泡堂命名空间适配器，底层使用从德扑提取的公共存档机制：
 

@@ -1,5 +1,5 @@
 import './save-dialog.css';
-import { downloadSaveFile } from '../vendor/game-common/src/storage/transfer';
+import { downloadSaveFile } from '../../../packages/game-common/src/storage/transfer';
 import type { createSaveStore } from './shared/save-store';
 import { savedMatchSlots, type Save } from './save';
 

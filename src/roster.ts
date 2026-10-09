@@ -1,4 +1,4 @@
-import sharedIdentities from "../vendor/game-common/players/identities.json";
+import sharedIdentities from "../../../packages/game-common/players/identities.json";
 export const identities = sharedIdentities;
 export type Personality = 'brave' | 'careful' | 'collector';
 export const roster = identities.map((identity, index) => ({
