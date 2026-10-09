@@ -1,0 +1,22 @@
+.championship-award{min-height:100dvh;position:relative;overflow:hidden;display:grid;place-items:center;padding:40px 24px;background:radial-gradient(ellipse at 50% 35%,#fff,#e5f3ff);text-align:center}
+.championship-award.is-champion{background:radial-gradient(ellipse at 50% 38%,#fff9df 0%,#fff 45%,#e9f4ff 100%)}
+.award-content{position:relative;z-index:2;width:min(100%,560px)}
+.award-label{font-size:13px;letter-spacing:.15em;color:#617d9c;font-weight:800;margin:0 0 24px}
+.award-emblem{position:relative;width:200px;height:220px;margin:0 auto 24px;display:grid;place-items:center}
+.award-emblem svg{width:160px;height:180px;filter:drop-shadow(0 12px 20px #d3973440);animation:trophy-arrive 900ms cubic-bezier(.16,1,.3,1) both}
+.award-emblem>span{font-size:110px}
+.is-champion .award-emblem::before{content:'';position:absolute;inset:-40px;border-radius:50%;background:repeating-conic-gradient(from 10deg,#ffca4833 0deg 12deg,transparent 12deg 30deg);mask-image:radial-gradient(#000,transparent 70%);animation:award-rays 24s linear infinite}
+.award-content h1{font-size:clamp(26px,5vw,44px);line-height:1.35;letter-spacing:-.03em;margin:0;color:#173d68}
+.award-content h1 span{display:block;font-size:clamp(42px,9vw,72px);color:#2586e9;margin-top:5px}
+.is-champion .award-content h1 span{color:#ba7a16;text-shadow:0 2px 0 #fff}
+.award-description{font-size:14px;line-height:1.8;color:#667d94;margin:20px 0 32px}
+.award-content>.button{width:min(100%,320px);justify-content:space-between;margin:auto;min-height:58px}
+.is-champion .award-content>.button{background:linear-gradient(#ffda6b,#f5b930);border-color:#e4a52c;color:#68450d;box-shadow:0 5px 0 #ce921e}
+.award-confetti{position:absolute;inset:0;pointer-events:none}
+.award-confetti i{position:absolute;left:var(--x);top:-24px;width:9px;height:17px;border-radius:2px;background:var(--color);animation:award-fall 3.8s var(--delay) ease-in both}
+@keyframes award-fall{to{translate:0 110dvh;rotate:var(--turn);opacity:.1}}
+@keyframes award-rays{to{rotate:360deg}}
+@keyframes trophy-arrive{from{opacity:0;transform:translateY(25px) scale(.7)}to{opacity:1;transform:none}}
+@media(max-height:650px){.championship-award{padding:24px 20px}.award-label{margin-bottom:12px}.award-emblem{height:140px;width:150px;margin-bottom:14px}.award-emblem svg{height:130px;width:116px}.award-description{margin:12px 0 22px}}
+.award-still .award-confetti{display:none}.award-still .award-emblem svg,.award-still .award-emblem::before{animation:none}
+@media(prefers-reduced-motion:reduce){.award-confetti{display:none}.award-emblem svg,.is-champion .award-emblem::before{animation:none}}

@@ -10,6 +10,7 @@ import './page-layout.css';
 import './game-layout.css';
 import './game-screen.css';
 import './theme.css';
+import './champion-celebration.css';
 import { notify, showDialog } from './ui-dialog';
 import { gameplayGuideMarkup } from './gameplay-guide';
 import { maps, mapInfo, type MapId } from './maps';
@@ -293,7 +294,9 @@ function autoSimulateTournament(): void {
   if (t.round !== 'complete') simulateToEnd(t);
   settleTournament(career, t);
   persist();
-  screen = 'tournament'; render(); window.scrollTo(0, 0);
+  screen = t.podium.includes('player') ? 'result' : 'tournament';
+  if (t.podium[0] === 'player') audio.play('champion');
+  render(); window.scrollTo(0, 0);
 }
 
 let autoSimAfterRound = false;
@@ -389,6 +392,19 @@ function pauseMarkup(mode: 'pause' | 'restart' = 'pause'): string {
 }
 
 function resultMarkup(): string {
+  if (!trial && matchMode === 'championship' && competition?.round === 'complete') {
+    const place = tournamentOrder(competition).indexOf('player') + 1;
+    const title = ['冠军', '亚军', '季军'][place - 1] ?? `第 ${place} 名`;
+    const champion = place === 1;
+    const ribbons = champion ? Array.from({length: 40}, (_, i) => `<i style="--x:${(i * 37) % 100}%;--delay:${(i % 8) * .18}s;--turn:${i * 31}deg;--color:${['#ffc64a','#ffffff','#439bff','#ff8b9d'][i % 4]}"></i>`).join('') : '';
+    return `<main class="screen championship-award${champion ? ' is-champion' : ''}${settings.reducedMotion ? ' award-still' : ''}">
+      <div class="award-confetti" aria-hidden="true">${ribbons}</div>
+      <div class="award-content"><p class="award-label">冠军之路 · 总决赛</p>
+      <div class="award-emblem" aria-hidden="true">${champion ? '<svg viewBox="0 0 160 180"><path d="M43 30H16v26c0 31 22 45 46 45M117 30h27v26c0 31-22 45-46 45" fill="none" stroke="#f7bb40" stroke-width="12"/><path d="M39 18h82v46c0 32-18 53-41 53S39 96 39 64Z" fill="url(#trophy-gold)"/><path d="M72 109h16v36h24v17H48v-17h24Z" fill="#d99a24"/><path d="m80 36 7 15 17 2-13 12 3 17-14-8-14 8 3-17-13-12 17-2Z" fill="#fff5c7"/><defs><linearGradient id="trophy-gold"><stop stop-color="#fff1a7"/><stop offset=".45" stop-color="#ffd04c"/><stop offset="1" stop-color="#d68a14"/></linearGradient></defs></svg>' : `<span>${place === 2 ? '🥈' : place === 3 ? '🥉' : '🏅'}</span>`}</div>
+      <h1>恭喜你获得<span>${title}！</span></h1>
+      <p class="award-description">${champion ? '从 64 位选手中脱颖而出，冠军属于你！' : '本届比赛圆满结束，见证你的精彩表现。'}</p>
+      <button class="button button-primary button-large" data-action="championship-settlement">查看结算 <span aria-hidden="true">→</span></button></div></main>`;
+  }
   if (trial) return page(game?.getResult() === 'win' ? '试玩完成！' : '本次试玩结束', `<div class="competition-card"><h2>${game?.getStandings().find(p=>p.id==='player')?.score ?? 0} 分</h2><p>这是本次试玩的局内得分，不计入长期积分、排行榜和正式战绩。</p><p>正式比赛与冠军赛的续玩进度保持不变。</p></div><div class="page-actions"><button class="button button-primary" data-action="restart">再试一次</button><button class="button" data-action="home">返回大厅</button></div>`);
   let result = game?.getResult() ?? 'draw';
   const standings = ranked(game?.getStandings() ?? []);
@@ -560,6 +576,7 @@ function handleAction(action: string): void {
     case 'tournament-autosim': autoSimulateTournament(); break;
     case 'skill': game?.usePlayerSkill(); break;
     case 'spectate-simulate': simulateRestAfterKnockout(); break;
+    case 'championship-settlement': stopGame(); screen = 'tournament'; render(); window.scrollTo(0, 0); break;
     case 'spectate-watch': {
       const title = app.querySelector('#spectate-title');
       if (title) title.textContent = '你已被淘汰 · 观战中';
@@ -808,10 +825,12 @@ function handleGameEvent(event: GameEvent): void {
     }
     if(!trial){suspended=null; matches[matchMode]=null;persist();}
     heldDirections.clear();
-    audio.play(event.result === 'win' ? 'win' : 'lose');
+    const championshipComplete = !trial && matchMode === 'championship' && competition?.round === 'complete';
+    if (championshipComplete) audio.play(competition?.podium[0] === 'player' ? 'champion' : 'win');
+    else audio.play(event.result === 'win' ? 'win' : 'lose');
     clearTimeout(resultTimer);
     // Championship: once the player is out of the tournament, simulate to the champion and show final results.
-    if (!trial && matchMode === 'championship' && competition && (autoSimAfterRound || !game?.getPlayerStats().alive || playerEliminated(competition))) {
+    if (!championshipComplete && !trial && matchMode === 'championship' && competition && (autoSimAfterRound || !game?.getPlayerStats().alive || playerEliminated(competition))) {
       if (!autoSimAfterRound) showToast('本轮止步，冠军赛将快速模拟至产生冠军');
       resultTimer = window.setTimeout(autoSimulateTournament, autoSimAfterRound ? 0 : 1400);
       autoSimAfterRound = false;
