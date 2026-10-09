@@ -294,3 +294,19 @@
   .game-screen .bomb-button.is-fired::after { animation: none; }
   .game-screen .dpad button { transition: none; }
 }
+
+/* Spectator choices occupy their own row, never cover the live board. */
+.game-screen.is-spectating { --deck: 8px; }
+.game-screen.is-spectating :is(.mobile-controls, .skill-dock, .desktop-controls) { display: none; }
+.game-screen .spectate-bar {
+  position: static; flex: none; transform: none;
+  width: calc(100% - var(--g) * 2); max-width: 640px;
+  margin: 8px auto var(--safe-b); flex-wrap: wrap;
+}
+.game-screen .spectate-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.game-screen .spectate-actions button[hidden] { display: none; }
+.game-screen .spectate-bar small { white-space: normal; line-height: 1.5; }
+@media (max-width: 600px) {
+  .game-screen .spectate-actions { width: 100%; }
+  .game-screen .spectate-actions .button { flex: 1; justify-content: center; min-height: 44px; }
+}

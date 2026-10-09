@@ -304,37 +304,20 @@ function fastForwardMatch(): void {
   const engine = game;
   if (!engine) return;
   fastForwarding = true;
-  engine.resume();
-  for (let i = 0; i < 6000 && engine.isRunning(); i += 1) engine.update(1 / 30);
-  fastForwarding = false;
+  try {
+    engine.resume();
+    for (let i = 0; i < 6000 && engine.isRunning(); i += 1) engine.update(1 / 30);
+  } finally {
+    fastForwarding = false;
+  }
 }
 
-/**
- * The player has been knocked out of the current match.
- * Championship (like 德州 冠军之路): no choice — the rest of the tournament is simulated automatically.
- * Single match: ask whether to simulate the rest of this match and jump to the result page.
- */
+/** Keep the battle running; the in-flow spectator controls offer both paths. */
 function handlePlayerKnockedOut(): void {
   if (!game || trial || autoSimAfterRound) return;
-  const engine = game;
-  const championship = matchMode === 'championship' && !!competition;
-  // Defer one tick: if this death also ended the round, the round-over flow takes over instead.
-  window.setTimeout(() => {
-    if (game !== engine || screen !== 'game' || engine.getResult()) return;
-    engine.pause();
-    void showDialog({
-      title: '你已被淘汰',
-      body: championship
-        ? '可以继续观战这一局，也可以直接模拟剩下的所有比赛，查看冠军赛最终名次。'
-        : '可以继续观战，也可以直接模拟剩下的比赛，查看本局结果。',
-      confirmText: '模拟剩下比赛',
-      cancelText: '继续观战',
-    }).then(ok => {
-      if (game !== engine || screen !== 'game') return;
-      if (!ok) { engine.resume(); return; }
-      simulateRestAfterKnockout();
-    });
-  }, 0);
+  holdingBomb = false;
+  heldDirections.clear();
+  if (matchMode === 'championship' && competition) autoSimAfterRound = true;
 }
 
 /** Player is out: finish this match headlessly; in the championship also simulate the rest of the event. */
@@ -395,7 +378,7 @@ function gameMarkup(): string {
       <div class="desktop-controls" aria-label="键盘操作"><p><b>↑↓←→</b><b>WASD</b>移动</p><p><b>SPACE</b>放炸弹</p><p><b>E</b>技能<b>F</b>替换</p><p><b>Esc</b>暂停</p></div>
       <div class="mobile-controls"><div class="dpad"><button data-dir="up" aria-label="上">▲</button><button data-dir="left" aria-label="左">◀</button><button data-dir="down" aria-label="下">▼</button><button data-dir="right" aria-label="右">▶</button></div><button class="bomb-button" data-action="bomb" aria-label="放置炸弹"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M30 13l5-6 5 3-2 5M34 5l2-3" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M27 12l9 7-5 6-9-7z" fill="currentColor"/><circle cx="22" cy="29" r="15" fill="currentColor"/><path d="M13 26q1-7 8-7" fill="none" stroke="#83dfff" stroke-width="3" stroke-linecap="round"/></svg><small>炸弹</small></button></div>
       <div class="skill-dock"><button id="skill-button" data-action="skill">空技能槽</button><button id="swap-button" data-action="swap" hidden></button></div>
-      <div class="spectate-bar" hidden><span class="spectate-eye" aria-hidden="true">👀</span><div><strong>观战中</strong><small id="spectate-note">本局结束后结算</small></div><button class="button button-primary" data-action="spectate-simulate">模拟剩下比赛</button></div>
+      <div class="spectate-bar" hidden><span class="spectate-eye" aria-hidden="true">👀</span><div><strong id="spectate-title" role="status">你已被淘汰</strong><small id="spectate-note">本局结束后结算</small></div><nav class="spectate-actions" aria-label="淘汰后的选择"><button class="button button-primary" data-action="spectate-simulate">模拟剩下比赛</button><button class="button" data-action="spectate-watch">继续观战</button></nav></div>
       <div id="toast" class="game-toast" aria-live="polite"></div>
     </main>`;
 }
@@ -577,6 +560,14 @@ function handleAction(action: string): void {
     case 'tournament-autosim': autoSimulateTournament(); break;
     case 'skill': game?.usePlayerSkill(); break;
     case 'spectate-simulate': simulateRestAfterKnockout(); break;
+    case 'spectate-watch': {
+      const title = app.querySelector('#spectate-title');
+      if (title) title.textContent = '你已被淘汰 · 观战中';
+      const button = app.querySelector<HTMLButtonElement>('[data-action="spectate-watch"]');
+      if (button) button.hidden = true;
+      game?.resume();
+      break;
+    }
     case 'swap': game?.replacePlayerSkill(); break;
     case 'start': confirmNewMatch=false; screen = 'setup'; render(); break;
     case 'cancel-new-match': confirmNewMatch=false; render(); break;
@@ -682,6 +673,7 @@ function mountGame(): void {
 }
 
 function stopGame(): void {
+  autoSimAfterRound = false;
   captureMatch();
   clearTimeout(resultTimer);
   heldDirections.clear();
@@ -784,7 +776,7 @@ function updateHud(): void {
   if (spectating) {
     const note = app.querySelector<HTMLElement>('#spectate-note');
     const left = game.getStandings().filter(a => a.alive).length;
-    const text = `剩余 ${left} 名选手 · ${matchMode === 'championship' ? '模拟会跑完整届冠军赛' : '本局结束后结算'}`;
+    const text = `剩余 ${left} 名选手 · ${matchMode === 'championship' ? '本局结束后自动结算整届比赛' : '本局结束后结算'}`;
     if (note && note.textContent !== text) note.textContent = text;
   }
   const toast = document.querySelector<HTMLElement>('#toast');
@@ -795,6 +787,8 @@ function updateHud(): void {
 }
 
 function handleGameEvent(event: GameEvent): void {
+  // Fast-forward preserves settlement, but must not schedule a burst of battle audio/effects.
+  if (fastForwarding && event.type !== 'round-over') return;
   if (event.type === 'notice') { showToast(event.text); audio.play('pickup'); if (game && !game.getPlayerStats().alive && event.text.includes('你已淘汰')) handlePlayerKnockedOut(); }
   if (event.type === 'bomb-placed') audio.play('place');
   if (event.type === 'explosion') audio.play('blast');
@@ -816,9 +810,8 @@ function handleGameEvent(event: GameEvent): void {
     heldDirections.clear();
     audio.play(event.result === 'win' ? 'win' : 'lose');
     clearTimeout(resultTimer);
-    clearTimeout(resultTimer);
     // Championship: once the player is out of the tournament, simulate to the champion and show final results.
-    if (!trial && matchMode === 'championship' && competition && (autoSimAfterRound || playerEliminated(competition))) {
+    if (!trial && matchMode === 'championship' && competition && (autoSimAfterRound || !game?.getPlayerStats().alive || playerEliminated(competition))) {
       if (!autoSimAfterRound) showToast('本轮止步，冠军赛将快速模拟至产生冠军');
       resultTimer = window.setTimeout(autoSimulateTournament, autoSimAfterRound ? 0 : 1400);
       autoSimAfterRound = false;
